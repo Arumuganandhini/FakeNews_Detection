@@ -28,3 +28,8 @@ Thumbs.db
 *.cache
 .env
 **/.env
+
+# === Evaluation datasets and results (large / regenerable) ===
+backend/eval/data/
+!backend/eval/data/smoke.csv
+backend/eval/results/
