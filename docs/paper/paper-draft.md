@@ -15,10 +15,10 @@ verification — and combines them into a transparent weighted trust score with
 per-factor evidence (flagged sentences, matched source ratings, and links to
 corroborating coverage from independent outlets). On the ISOT benchmark, with
 source-identity leakage explicitly controlled, the content-based pipeline
-achieves 92.0% accuracy and 0.993 ROC-AUC *(n=100, preliminary)*, outperforming
-a single-prompt LLM baseline (84.0%, 0.883). We further show that a
+achieves 94.7% accuracy and 0.987 ROC-AUC (n=300, stratified), outperforming
+a single-prompt LLM baseline (82.0%, 0.838). We further show that a
 one-parameter-pair Platt scaling step reduces expected calibration error from
-0.273 to 0.054, yielding trust scores that are not only accurate but honest
+0.277 to 0.073, yielding trust scores that are not only accurate but honest
 about their own confidence. The system runs on live news in a deployed web
 application.
 
@@ -88,24 +88,31 @@ weighted aggregation → trust report UI).
 
 ## 5. Results
 
-### 5.1 Main results and ablation *(n=100, preliminary — replace with n=300)*
+### 5.1 Main results and ablation (n=300 per configuration, stratified 150 fake / 150 real, seed 42)
 
 | Configuration | Accuracy | Macro-F1 | ROC-AUC | ECE raw | ECE calibrated |
 |---|---|---|---|---|---|
-| Single-prompt baseline | 84.0% | 84.0% | 0.883 | 0.242 | 0.119 |
-| Full pipeline (clickbait + bias) | **92.0%** | **92.0%** | **0.993** | 0.273 | **0.054** |
-| Ablation: clickbait only | 92.0% | 92.0% | 0.986 | — | — |
-| Ablation: bias only | 92.0% | 92.0% | 0.942 | — | — |
+| Single-prompt baseline | 82.0% | 81.9% | 0.838 | 0.215 | 0.151 |
+| **Full pipeline (clickbait + bias)** | **94.7%** | **94.7%** | **0.987** | 0.277 | **0.073** |
+| Ablation: clickbait only | 93.3% | 93.3% | 0.975 | 0.339 | 0.118 |
+| Ablation: bias only | 92.7% | 92.7% | 0.934 | 0.359 | 0.204 |
 
 Talking points (TODO: prose):
-- Pipeline beats baseline by +8 accuracy points and +0.11 AUC.
-- Both factors contribute; combination is best (AUC ordering 0.942 < 0.986 < 0.993).
-- Accuracy ties across ablations at this sample size; AUC discriminates.
+- Pipeline beats the single-prompt baseline by +12.7 accuracy points and
+  +0.149 AUC — decomposing the judgment into focused factors outperforms one
+  holistic LLM prompt with the *same underlying model*.
+- Clean ablation ordering: bias-only 0.934 < clickbait-only 0.975 <
+  combined 0.987 AUC. Both factors contribute; headline analysis is the
+  stronger single signal on ISOT, and the combination is strictly best.
+- Full pipeline also achieves the best calibrated ECE (0.073, the only
+  configuration inside the well-calibrated < 0.1 range).
+- During evaluation, transient API failures abort and retry the affected
+  article rather than recording a neutral fallback (results integrity).
 
 ### 5.2 Calibration
 
-- Raw scores rank well but cluster mid-range → ECE 0.273.
-- Platt scaling (fitted on validation half) → ECE 0.054: a "70% trust" score
+- Raw scores rank well but cluster mid-range → ECE 0.277.
+- Platt scaling (fitted on validation half) → ECE 0.073: a "70% trust" score
   now means ≈70% empirical probability of being real.
 - Figure 2: reliability diagram before/after (data in
   `backend/eval/results/summary.json`, `calibrationBins` /

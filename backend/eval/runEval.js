@@ -136,10 +136,17 @@ async function evalOne(item, cfg, hideSource) {
     return { score, factors: { baseline: score }, note: reasoning?.slice(0, 200) };
   }
 
+  // A factor that failed (network / parse error) must abort the article so it
+  // is retried on resume — recording its neutral fallback would pollute results.
+  const requireOk = (result, factor) => {
+    if (result.failed) throw new Error(`${factor} factor failed — will retry on resume`);
+    return result;
+  };
+
   const scores = {};
   if (cfg.source) scores.sourceReputation = getSourceReputation(source, null).score;
-  if (cfg.clickbait) { scores.clickbait = (await analyzeClickbait(title)).score; await sleep(MIN_GAP_MS); }
-  if (cfg.bias) { scores.bias = (await analyzeBias(title, text)).score; await sleep(MIN_GAP_MS); }
+  if (cfg.clickbait) { scores.clickbait = requireOk(await analyzeClickbait(title), 'clickbait').score; await sleep(MIN_GAP_MS); }
+  if (cfg.bias) { scores.bias = requireOk(await analyzeBias(title, text), 'bias').score; await sleep(MIN_GAP_MS); }
   if (cfg.verification) {
     const v = await verifyClaims(title, text, source);
     // Match production behavior: only count verification when it found evidence.
