@@ -1,271 +1,110 @@
 # 🛡️ AI-Powered News Trust and Credibility Analysis Platform
 
-## 📖 Project Overview
+**Final-Year Project — Team CO5** · Mugilan K S (23CSR138) · Nandha Kumar S (23CSR140) · Nandhini A (23CSR141)
+**Guide:** Ms. M. Kannukkiniyal · **Course:** 22CSP72 Project Work II
 
-The rapid growth of digital media and social networking platforms has made it difficult for users to identify trustworthy news. Fake news, biased reporting, clickbait content, and manipulated media are spreading faster than ever before.
-
-This project aims to build an AI-powered platform that not only detects fake news but also evaluates the credibility, trustworthiness, and reliability of news articles.
-
----
-
-## 🎯 Problem Statement
-
-Most existing fake news detection systems only classify news as either "Fake" or "Real".
-
-These systems have several limitations:
-
-* They do not explain why a news article is fake.
-* They do not analyze source credibility.
-* They do not identify political or emotional bias.
-* They do not verify claims across multiple trusted news sources.
-* They provide limited transparency to users.
-* Most systems mainly support English content.
-
-As a result, users still struggle to understand whether a news article can truly be trusted.
+Most fake-news detectors only say **"Fake" or "Real"** — with no reasons, no
+evidence, and no idea how confident they really are. This platform instead
+analyzes every news article from **four independent angles** and produces an
+**explainable trust score** the user can actually inspect.
 
 ---
 
-## 🔍 Existing System
-
-Current fake news detection systems generally use:
-
-* Machine Learning
-* Deep Learning
-* NLP Models
-
-Examples:
-
-* Naive Bayes
-* SVM
-* Random Forest
-* CNN
-* LSTM
-* BERT
-
-### ⚠️ Limitations of Existing Systems
-
-* Fake/Real classification only.
-* No credibility analysis.
-* No source reliability checking.
-* No bias detection.
-* No claim verification.
-* No explanation for prediction.
-* Limited multilingual support.
-
----
-
-## 🚀 Proposed Solution
-
-The proposed system goes beyond traditional fake news detection.
-
-Instead of simply classifying news as Fake or Real, the system provides a complete trust analysis.
-
-The platform analyzes:
-
-* News content
-* News source
-* Writing style
-* Bias level
-* Supporting evidence
-* News credibility
-
-and generates a Trust Score with explanations.
-
----
-
-## ✨ Key Features
-
-### 📰 1. Fake News Detection
-
-Analyze news content using Deep Learning and NLP models.
-
-Output:
-
-* Fake News
-* Real News
-
----
-
-### 🌐 2. Source Credibility Analysis
-
-Check whether the news source is trustworthy.
-
-Examples:
-
-* BBC
-* The Hindu
-* Reuters
-
-Reliable sources receive higher credibility scores.
-
----
-
-### ⚖️ 3. Bias Detection
-
-Identify:
-
-* Political Bias
-* Emotional Bias
-* One-Sided Reporting
-
-This helps users understand whether the article is neutral or biased.
-
----
-
-### 🔄 4. Cross-Source Verification
-
-Important claims are compared with multiple trusted news sources.
-
-If the same claim appears in trusted sources:
-
-* Credibility increases
-
-If conflicting information is found:
-
-* Credibility decreases
-
----
-
-### 🤖 5. Explainable AI
-
-Instead of showing only a score, the system explains the reasons.
-
-Example:
-
-Trust Score: 35%
-
-Reason:
-
-* Low source reliability
-* Clickbait headline detected
-* Conflicting reports found
-
----
-
-### 🌍 6. Multilingual News Analysis
-
-Support for:
-
-* English
-* Tamil
-* Hindi
-* Other regional languages
-
-This addresses the limitation of existing English-only systems.
-
----
-
-### ✅ 7. Claim-Level Fact Checking
-
-Analyze news sentence by sentence.
-
-Example:
-
-Statement: "India won the match."
-
-Result: Verified
-
-Statement: "Virat Kohli scored 500 runs in one over."
-
-Result: False Claim
-
-This provides more detailed verification than article-level classification.
-
----
-
-### 📝 8. News Summarization
-
-Convert long news articles into short summaries.
-
-Example:
-
-1000-word article
-↓
-5-line summary
-
-This improves readability and user experience.
-
----
-
-### 📡 9. Real-Time Breaking News Monitoring
-
-Monitor news websites continuously.
-
-If suspicious news is detected:
-
-* Immediate alert generated
-
-This helps identify misinformation quickly.
-
----
-
-## 📚 Research Gap
-
-Most existing systems focus only on fake news classification.
-
-Very few systems combine:
-
-* Credibility Analysis
-* Bias Detection
-* Cross-Source Verification
-* Explainable AI
-* Multilingual Support
-* Claim-Level Fact Checking
-* News Summarization
-
-within a single platform.
-
----
-
-## 🎯 Expected Outcome
-
-The system helps users:
-
-* Identify trustworthy news
-* Understand bias in reporting
-* Verify important claims
-* Avoid misinformation
-* Understand why a news article received a specific trust score
-
----
+## ✨ How It Works
+
+Each article is analyzed by four parallel checkers:
+
+| # | Checker | What it does |
+|---|---------|--------------|
+| 1 | **Source Reputation** | Looks up the outlet in a curated database of ~120 rated news sources |
+| 2 | **Headline Quality** | Detects clickbait signals in the headline |
+| 3 | **Neutral Language** | Flags biased or emotionally manipulative sentences, with reasons |
+| 4 | **Cross-Source Verification** | Extracts the article's main claims and checks whether *other* independent outlets report the same facts |
+
+The four results combine into one **transparent weighted trust score** — a
+formula anyone can audit, not another AI guess. The verification step never
+"verifies from memory": the LLM only compares the article against real
+coverage retrieved via NewsAPI, and honestly reports **"unverified"** (with
+its weight redistributed) when no independent coverage exists.
+
+The final score is **calibrated** (Platt scaling): when the system says 70%
+trust, it is right about 70% of the time.
+
+## 📊 Measured Results
+
+Evaluated on 300 articles from the standard **ISOT dataset** (150 fake / 150
+real), with source-identity leakage controlled:
+
+| Approach | Accuracy | ROC-AUC |
+|----------|----------|---------|
+| Asking the LLM directly (single prompt) | 82.0% | 0.838 |
+| **Our 4-factor pipeline (same LLM)** | **94.7%** | **0.987** |
+
+Removing any single checker lowers accuracy — every module contributes.
+Full evaluation framework in [`backend/eval/`](backend/eval/) (resumable,
+seeded, reproducible). Research paper draft in
+[`docs/paper/`](docs/paper/paper-draft.md).
+
+## 🖥️ Platform Features
+
+- 📰 Daily news feed (NewsAPI) with category browsing
+- 🛡️ One-click **"Analyze Trustworthiness"** report per article: score dial,
+  factor bars, highlighted biased sentences, and evidence links
+- ✍️ AI summaries (short and detailed) per article
+- 🧠 News-literacy quizzes generated from article content
+- 👤 Accounts, reading history, and activity tracking
 
 ## 🛠️ Technology Stack
 
-### 🎨 Frontend
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 19 |
+| Backend | Node.js + Express |
+| Database | MongoDB (Mongoose) |
+| AI Model | Llama-3.1-8B via NVIDIA NIM API |
+| News Data | NewsAPI |
+| Auth | JWT + bcrypt |
 
-* React.js
+## 🚀 Running Locally
 
-### ⚙️ Backend
+```bash
+# Backend
+cd backend
+npm install
+# create backend/.env with:
+#   MONGO_URI=mongodb://127.0.0.1:27017/news_curator
+#   JWT_SECRET=<any long random string>
+#   NIM_API_KEY=<free key from build.nvidia.com>
+#   NEWS_API_KEY=<free key from newsapi.org>
+npm run dev
 
-* Python (Flask/FastAPI)
+# Frontend (second terminal)
+cd frontend
+npm install
+npm start
+```
 
-### 🧠 Machine Learning / Deep Learning
+## 📁 Repository Layout
 
-* BERT
-* RoBERTa
-* Transformers
+```
+backend/
+  agents/          # the 4 analysis checkers + orchestrator + legacy baseline
+  eval/            # evaluation framework (benchmark runner, metrics, reports)
+  routes/ models/  # Express API + MongoDB schemas
+frontend/
+  src/components/TrustReport.js   # explainable trust report UI
+docs/
+  proposal/        # project proposal documents
+  paper/           # research paper draft
+```
 
-### 🗄️ Database
+## 📚 Key References
 
-* MongoDB
-
-### 📖 NLP
-
-* Hugging Face Transformers
-* NLTK
-
----
-
-## 🔮 Future Scope
-
-* Browser Extension
-* Mobile Application
-* Social Media Integration
-* Real-Time News Monitoring Dashboard
-* Advanced Deepfake Detection
-
----
-
-## 📌 Conclusion
-
-The proposed AI-Powered News Trust and Credibility Analysis Platform provides a complete solution for news verification by combining fake news detection, credibility analysis, bias detection, multilingual support, claim verification, and explainable AI into a single intelligent platform.
+1. K. Shu et al., *dEFEND: Explainable Fake News Detection*, ACM KDD 2019.
+2. B. Wang et al., *Explainable Fake News Detection with Large Language Model
+   via Defense Among Competing Wisdom*, ACM Web Conference 2024.
+3. H. Ahmed, I. Traore, S. Saad, *Detection of Online Fake News Using N-Gram
+   Analysis and Machine Learning Techniques*, ISDDC 2017 (ISOT dataset).
+4. S. Amri et al., *ExFake: Towards an Explainable Fake News Detection Based
+   on Content and Social Context Information*, 2023.
+5. C. Guo et al., *On Calibration of Modern Neural Networks*, ICML 2017.
