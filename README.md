@@ -1,91 +1,110 @@
-# 📰 News Curator - AI Truth & Integrity Engine
-### Combating Misinformation with LangChain-Powered News Verification
+# 🛡️ AI-Powered News Trust and Credibility Analysis Platform
 
-[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
-[![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white)](https://langchain.com/)
-[![NodeJS](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
-[![Lucide](https://img.shields.io/badge/Lucide_React-000?style=for-the-badge&logo=lucide&logoColor=white)](https://lucide.dev/)
+**Final-Year Project — Team CO5** · Mugilan K S (23CSR138) · Nandha Kumar S (23CSR140) · Nandhini A (23CSR141)
+**Guide:** Ms. M. Kannukkiniyal · **Course:** 22CSP72 Project Work II
 
-**News Curator** is an advanced integrity platform designed to assess the veracity of daily news and empower users with a "Credibility Score." By leveraging LLMs via LangChain, it provides deep analysis of news cycles, fact-checking capabilities, and a unique, curated experience that prioritizes truth over clickbait.
-
----
-
-## 🚀 Key Modules & Capabilities
-
-### ⚖️ AI Truth Assessment Engine
-*   **LangChain Fact-Checking**: Automated analysis of news articles using sophisticated AI chains to detect bias and verify claims against global sources.
-*   **Credibility Scoring**: A unique user-centric system that rewards engagement with verified news and high-quality contributions.
-*   **Verdict Dashboard**: Clear indicators (Verified, Disputed, Misleading) for every trending story.
-
-### 🏛️ "Vintage Newsprint" Dashboard
-*   **Sophisticated News Curator**: A uniquely themed landing page that blends the classic "Old Newspaper" aesthetic with high-tech AI insights.
-*   **Daily News Feed**: Real-time aggregation of worldwide news, categorized by topic and intelligence level.
-*   **Interactive Insights**: Visual breakdowns of news credibility trends over time.
-
-### 📝 User Integrity Ecosystem
-*   **Profile Verification**: Systems to track and display user credibility based on their interaction with fact-checked content.
-*   **Article Engagement**: Tools for users to flag, comment on, and discuss article veracity in a structured environment.
-*   **Multi-Source Comparison**: Side-by-side analysis of how different outlets are reporting the same event.
-
-### 🛡️ Secure Intelligence Framework
-*   **Robust Authentication**: JWT-based secure access for customized news curation.
-*   **AI Prompt Engine**: Integrated quiz and prompt pages to test user news literacy and awareness.
+Most fake-news detectors only say **"Fake" or "Real"** — with no reasons, no
+evidence, and no idea how confident they really are. This platform instead
+analyzes every news article from **four independent angles** and produces an
+**explainable trust score** the user can actually inspect.
 
 ---
 
-## 🎨 Premium Design Aesthetics
-*   **Old Newspaper Ethos**: A distinctive "Newsprint" design system using `Playfair Display` and `Source Serif Pro` fonts, yellowish paper textures, and ink-dark headlines.
-*   **3D Interactive Elements**: Floating 3D mockups and a 3D animated feature slider that make the vintage theme feel modern and high-end.
-*   **Micro-Animations**: Paper-flutter effects and SVG-based grain textures that provide an authentic, tactile feel.
-*   **Steel Blue Accents**: A curated accent palette that complements the aged-paper background for a "Premium Professional" look.
+## ✨ How It Works
 
----
+Each article is analyzed by four parallel checkers:
+
+| # | Checker | What it does |
+|---|---------|--------------|
+| 1 | **Source Reputation** | Looks up the outlet in a curated database of ~120 rated news sources |
+| 2 | **Headline Quality** | Detects clickbait signals in the headline |
+| 3 | **Neutral Language** | Flags biased or emotionally manipulative sentences, with reasons |
+| 4 | **Cross-Source Verification** | Extracts the article's main claims and checks whether *other* independent outlets report the same facts |
+
+The four results combine into one **transparent weighted trust score** — a
+formula anyone can audit, not another AI guess. The verification step never
+"verifies from memory": the LLM only compares the article against real
+coverage retrieved via NewsAPI, and honestly reports **"unverified"** (with
+its weight redistributed) when no independent coverage exists.
+
+The final score is **calibrated** (Platt scaling): when the system says 70%
+trust, it is right about 70% of the time.
+
+## 📊 Measured Results
+
+Evaluated on 300 articles from the standard **ISOT dataset** (150 fake / 150
+real), with source-identity leakage controlled:
+
+| Approach | Accuracy | ROC-AUC |
+|----------|----------|---------|
+| Asking the LLM directly (single prompt) | 82.0% | 0.838 |
+| **Our 4-factor pipeline (same LLM)** | **94.7%** | **0.987** |
+
+Removing any single checker lowers accuracy — every module contributes.
+Full evaluation framework in [`backend/eval/`](backend/eval/) (resumable,
+seeded, reproducible). Research paper draft in
+[`docs/paper/`](docs/paper/paper-draft.md).
+
+## 🖥️ Platform Features
+
+- 📰 Daily news feed (NewsAPI) with category browsing
+- 🛡️ One-click **"Analyze Trustworthiness"** report per article: score dial,
+  factor bars, highlighted biased sentences, and evidence links
+- ✍️ AI summaries (short and detailed) per article
+- 🧠 News-literacy quizzes generated from article content
+- 👤 Accounts, reading history, and activity tracking
 
 ## 🛠️ Technology Stack
-*   **Frontend**: React 19 (Hooks, Router, Lucide React)
-*   **AI/LLM Logic**: LangChain (Community & Core)
-*   **Backend**: Node.js & Express.js
-*   **Database**: MongoDB with Mongoose
-*   **Theming**: Advanced Vanilla CSS with CSS Variables & 3D Transform layers
-*   **Security**: BcryptJS & JWT
 
----
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 19 |
+| Backend | Node.js + Express |
+| Database | MongoDB (Mongoose) |
+| AI Model | Llama-3.1-8B via NVIDIA NIM API |
+| News Data | NewsAPI |
+| Auth | JWT + bcrypt |
 
-## ⚡ Performance Optimization
-*   **Aggregated News Fetching**: Efficient background processing for fetching and analyzing news from multiple APIs.
-*   **3D Performance Tuning**: Optimized CSS animations and SVG filters to ensure smooth visuals without high GPU overhead.
-*   **Memoized AI Analysis**: Caching results of common fact-check requests to reduce LLM tokens and latency.
+## 🚀 Running Locally
 
----
+```bash
+# Backend
+cd backend
+npm install
+# create backend/.env with:
+#   MONGO_URI=mongodb://127.0.0.1:27017/news_curator
+#   JWT_SECRET=<any long random string>
+#   NIM_API_KEY=<free key from build.nvidia.com>
+#   NEWS_API_KEY=<free key from newsapi.org>
+npm run dev
 
-## 📦 Installation & Development
+# Frontend (second terminal)
+cd frontend
+npm install
+npm start
+```
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/NKcoder5/news_curator_deployed.git
-   cd news_curator_deployed
-   ```
+## 📁 Repository Layout
 
-2. **Backend Setup**:
-   ```bash
-   cd backend
-   npm install
-   # Create .env with MONGO_URI, JWT_SECRET, and AI_API_KEYS
-   node app.js
-   ```
+```
+backend/
+  agents/          # the 4 analysis checkers + orchestrator + legacy baseline
+  eval/            # evaluation framework (benchmark runner, metrics, reports)
+  routes/ models/  # Express API + MongoDB schemas
+frontend/
+  src/components/TrustReport.js   # explainable trust report UI
+docs/
+  proposal/        # project proposal documents
+  paper/           # research paper draft
+```
 
-3. **Frontend Setup**:
-   ```bash
-   cd ../frontend
-   npm install
-   npm start
-   ```
+## 📚 Key References
 
----
-
-## 📄 License
-Developed for **News Curator Integrity Initiative**. All rights reserved.
-
----
-*Created with ❤️ to bring Truth back to the Headline.*
+1. K. Shu et al., *dEFEND: Explainable Fake News Detection*, ACM KDD 2019.
+2. B. Wang et al., *Explainable Fake News Detection with Large Language Model
+   via Defense Among Competing Wisdom*, ACM Web Conference 2024.
+3. H. Ahmed, I. Traore, S. Saad, *Detection of Online Fake News Using N-Gram
+   Analysis and Machine Learning Techniques*, ISDDC 2017 (ISOT dataset).
+4. S. Amri et al., *ExFake: Towards an Explainable Fake News Detection Based
+   on Content and Social Context Information*, 2023.
+5. C. Guo et al., *On Calibration of Modern Neural Networks*, ICML 2017.
