@@ -1,110 +1,157 @@
 # 🛡️ AI-Powered News Trust and Credibility Analysis Platform
 
-**Final-Year Project — Team CO5** · Mugilan K S (23CSR138) · Nandha Kumar S (23CSR140) · Nandhini A (23CSR141)
-**Guide:** Ms. M. Kannukkiniyal · **Course:** 22CSP72 Project Work II
+## 📖 Project Overview
 
-Most fake-news detectors only say **"Fake" or "Real"** — with no reasons, no
-evidence, and no idea how confident they really are. This platform instead
-analyzes every news article from **four independent angles** and produces an
-**explainable trust score** the user can actually inspect.
+The rapid growth of digital media has made it difficult for users to identify trustworthy news. Fake news, biased reporting, and clickbait content spread faster than ever before.
+
+Most fake news detectors only answer one question — "Fake or Real?" — with no reasons, no evidence, and no measure of confidence.
+
+This project goes further. It analyzes every news article from **four independent angles** and produces an **explainable trust score** that users can actually inspect and understand.
 
 ---
 
-## ✨ How It Works
+## 🎯 Problem Statement
 
-Each article is analyzed by four parallel checkers:
+Existing fake news detection systems have several limitations:
 
-| # | Checker | What it does |
-|---|---------|--------------|
-| 1 | **Source Reputation** | Looks up the outlet in a curated database of ~120 rated news sources |
-| 2 | **Headline Quality** | Detects clickbait signals in the headline |
-| 3 | **Neutral Language** | Flags biased or emotionally manipulative sentences, with reasons |
-| 4 | **Cross-Source Verification** | Extracts the article's main claims and checks whether *other* independent outlets report the same facts |
+* They only classify news as Fake or Real.
+* They do not explain **why** an article is untrustworthy.
+* They do not check the reliability of the news source.
+* They do not detect biased or emotionally manipulative language.
+* They do not verify claims against other news outlets.
+* Their confidence scores are often dishonest — a system may say "90% sure" while being right only 60% of the time.
 
-The four results combine into one **transparent weighted trust score** — a
-formula anyone can audit, not another AI guess. The verification step never
-"verifies from memory": the LLM only compares the article against real
-coverage retrieved via NewsAPI, and honestly reports **"unverified"** (with
-its weight redistributed) when no independent coverage exists.
+As a result, users still struggle to judge whether a news article can truly be trusted.
 
-The final score is **calibrated** (Platt scaling): when the system says 70%
-trust, it is right about 70% of the time.
+---
 
-## 📊 Measured Results
+## 🚀 Our Solution
 
-Evaluated on 300 articles from the standard **ISOT dataset** (150 fake / 150
-real), with source-identity leakage controlled:
+Instead of one black-box prediction, every article passes through **four parallel checkers**:
 
-| Approach | Accuracy | ROC-AUC |
-|----------|----------|---------|
-| Asking the LLM directly (single prompt) | 82.0% | 0.838 |
-| **Our 4-factor pipeline (same LLM)** | **94.7%** | **0.987** |
+### 🏛️ 1. Source Reputation
 
-Removing any single checker lowers accuracy — every module contributes.
-Full evaluation framework in [`backend/eval/`](backend/eval/) (resumable,
-seeded, reproducible). Research paper draft in
-[`docs/paper/`](docs/paper/paper-draft.md).
+Checks the news outlet against a curated database of ~120 rated sources.
 
-## 🖥️ Platform Features
+Reliable outlets raise the trust score. Unknown or low-rated outlets lower it.
 
-- 📰 Daily news feed (NewsAPI) with category browsing
-- 🛡️ One-click **"Analyze Trustworthiness"** report per article: score dial,
-  factor bars, highlighted biased sentences, and evidence links
-- ✍️ AI summaries (short and detailed) per article
-- 🧠 News-literacy quizzes generated from article content
-- 👤 Accounts, reading history, and activity tracking
+### 📰 2. Headline Quality (Clickbait Detection)
+
+Analyzes the headline for clickbait patterns:
+
+* Exaggerated or sensational wording
+* Curiosity-gap phrasing ("You won't BELIEVE...")
+* Fear-mongering and emotional manipulation
+
+### ⚖️ 3. Bias & Language Analysis
+
+Reads the article content and **highlights the exact sentences** that show:
+
+* Political bias
+* One-sided reporting
+* Sensationalism and emotional manipulation
+
+Each flagged sentence comes with the reason it was flagged.
+
+### 🔄 4. Cross-Source Verification
+
+The most important checker:
+
+* Extracts the article's main factual claims
+* Searches what **other independent news outlets** reported
+* Compares the claims against that real coverage
+
+If other outlets confirm the claims → trust increases.
+If they contradict the claims → trust decreases and the user is alerted.
+If no coverage exists → the system honestly reports **"unverified"** instead of guessing.
+
+The AI never "verifies from memory" — every verdict is grounded in retrieved evidence, with links the user can click and check.
+
+---
+
+## 🤖 Explainable Trust Score
+
+The four results combine into one trust score through a **transparent weighted formula** — not another AI guess. The user sees the full breakdown:
+
+* Overall score dial with a verdict (Trustworthy / Exercise Caution / Low Credibility)
+* Individual bars for each of the four factors
+* The highlighted biased sentences
+* The verified/contradicted claims with evidence links
+
+The score is also **calibrated**: when the system says 70% trust, it is actually right about 70% of the time.
+
+---
+
+## 📊 Tested Results
+
+Tested on 300 articles from the standard **ISOT fake news dataset** (150 fake, 150 real):
+
+| Approach | Accuracy |
+|----------|----------|
+| Asking the AI model directly (single prompt) | 82.0% |
+| **Our 4-factor pipeline (same AI model)** | **94.7%** |
+
+Removing any single checker lowers the accuracy — proof that every module contributes. The full testing framework is included in the repository and every result is reproducible.
+
+---
+
+## ✨ Platform Features
+
+* 📰 Daily news feed with category browsing
+* 🛡️ One-click **"Analyze Trustworthiness"** report for any article
+* ✍️ AI-generated short and detailed summaries
+* 🧠 News-literacy quizzes generated from article content
+* 👤 User accounts, reading history, and activity tracking
+
+---
 
 ## 🛠️ Technology Stack
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 19 |
-| Backend | Node.js + Express |
-| Database | MongoDB (Mongoose) |
-| AI Model | Llama-3.1-8B via NVIDIA NIM API |
-| News Data | NewsAPI |
-| Auth | JWT + bcrypt |
+### 🎨 Frontend
 
-## 🚀 Running Locally
+* React.js
 
-```bash
-# Backend
-cd backend
-npm install
-# create backend/.env with:
-#   MONGO_URI=mongodb://127.0.0.1:27017/news_curator
-#   JWT_SECRET=<any long random string>
-#   NIM_API_KEY=<free key from build.nvidia.com>
-#   NEWS_API_KEY=<free key from newsapi.org>
-npm run dev
+### ⚙️ Backend
 
-# Frontend (second terminal)
-cd frontend
-npm install
-npm start
-```
+* Node.js + Express.js
 
-## 📁 Repository Layout
+### 🧠 AI / NLP
 
-```
-backend/
-  agents/          # the 4 analysis checkers + orchestrator + legacy baseline
-  eval/            # evaluation framework (benchmark runner, metrics, reports)
-  routes/ models/  # Express API + MongoDB schemas
-frontend/
-  src/components/TrustReport.js   # explainable trust report UI
-docs/
-  proposal/        # project proposal documents
-  paper/           # research paper draft
-```
+* Llama 3.1 (via NVIDIA NIM API)
+* Custom multi-factor analysis pipeline
 
-## 📚 Key References
+### 🗄️ Database
 
-1. K. Shu et al., *dEFEND: Explainable Fake News Detection*, ACM KDD 2019.
-2. B. Wang et al., *Explainable Fake News Detection with Large Language Model
-   via Defense Among Competing Wisdom*, ACM Web Conference 2024.
-3. H. Ahmed, I. Traore, S. Saad, *Detection of Online Fake News Using N-Gram
-   Analysis and Machine Learning Techniques*, ISDDC 2017 (ISOT dataset).
-4. S. Amri et al., *ExFake: Towards an Explainable Fake News Detection Based
-   on Content and Social Context Information*, 2023.
-5. C. Guo et al., *On Calibration of Modern Neural Networks*, ICML 2017.
+* MongoDB
+
+### 📡 News Data
+
+* NewsAPI
+
+---
+
+## 🔮 Future Scope
+
+* 🏆 **News Literacy Levels** — users earn points for reading verified news and level up from "Reader" to "Fact Checker" to "Truth Guardian"
+* 🔀 **Compare Coverage** — see side-by-side how different outlets report the same story
+* 🔗 **Analyze Any Article** — paste any news link and get a full trust report
+* 📈 **Personal Trust Dashboard** — charts of the trust level of what you read
+
+---
+
+## 👥 Team CO5
+
+| Name | Roll No |
+|------|---------|
+| Mugilan K S | 23CSR138 |
+| Nandha Kumar S | 23CSR140 |
+| Nandhini A | 23CSR141 |
+
+**Guide:** Ms. M. Kannukkiniyal
+**Course:** 22CSP72 — Project Work II
+
+---
+
+## 📌 Conclusion
+
+This platform provides a complete solution for news verification by combining source credibility analysis, clickbait detection, bias detection, cross-source claim verification, and explainable AI into a single working system — helping users not just detect fake news, but understand **why** an article can or cannot be trusted.
