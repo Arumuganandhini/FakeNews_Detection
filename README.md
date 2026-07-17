@@ -139,19 +139,6 @@ Removing any single checker lowers the accuracy — proof that every module cont
 
 ---
 
-## 👥 Team CO5
-
-| Name | Roll No |
-|------|---------|
-| Mugilan K S | 23CSR138 |
-| Nandha Kumar S | 23CSR140 |
-| Nandhini A | 23CSR141 |
-
-**Guide:** Ms. M. Kannukkiniyal
-**Course:** 22CSP72 — Project Work II
-
----
-
 ## 📌 Conclusion
 
 This platform provides a complete solution for news verification by combining source credibility analysis, clickbait detection, bias detection, cross-source claim verification, and explainable AI into a single working system — helping users not just detect fake news, but understand **why** an article can or cannot be trusted.
