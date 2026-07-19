@@ -1,0 +1,38 @@
+# Trained model weights (too large / regenerate locally, do not commit)
+models/
+*.bin
+*.safetensors
+*.pt
+*.pth
+
+# SQLite user database (contains user accounts, keep local)
+users.db
+*.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+
+# Large datasets (too big for GitHub - keep local only)
+datasets/
