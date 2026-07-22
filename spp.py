@@ -10,6 +10,8 @@ import pandas as pd
 import sqlite3
 import hashlib
 import io
+from datetime import datetime
+from urllib.parse import urlparse
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 # ---- New: PDF text extraction ----
@@ -23,6 +25,16 @@ import pytesseract
 # on your PATH. Uncomment and edit the line below after installing Tesseract
 # (default install location shown):
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+# ---- New: Downloadable PDF trust report ----
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+
+# ---- New: Score breakdown charts ----
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Pure Press | News Trust Platform", page_icon="📰", layout="wide")
 
@@ -40,11 +52,49 @@ def init_db():
             password_hash TEXT NOT NULL
         )
     """)
+    # ---- New: Analysis History table ----
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            module TEXT NOT NULL,
+            headline TEXT,
+            trust_score REAL,
+            risk_level TEXT,
+            checked_at TEXT
+        )
+    """)
     conn.commit()
     conn.close()
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
+
+# ---- New: Analysis History helpers ----
+def save_history(username, module, headline, trust_score, risk_level):
+    if not username:
+        return
+    conn = sqlite3.connect("users.db")
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO history (username, module, headline, trust_score, risk_level, checked_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (username, module, headline, trust_score, risk_level, datetime.now().strftime("%Y-%m-%d %H:%M")),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_history(username):
+    conn = sqlite3.connect("users.db")
+    c = conn.cursor()
+    c.execute(
+        "SELECT module, headline, trust_score, risk_level, checked_at FROM history WHERE username = ? ORDER BY id DESC",
+        (username,),
+    )
+    rows = c.fetchall()
+    conn.close()
+    return rows
 
 def create_user(username, email, password):
     conn = sqlite3.connect("users.db")
@@ -131,7 +181,62 @@ def predict_clickbait(text, tokenizer, model):
     return {"prediction": "Clickbait" if clickbait_prob > 0.5 else "Not Clickbait", "clickbait_score": clickbait_prob}
 
 
-def calculate_trust_score(headline, article_text, models):
+# =====================================================================
+# NEW: Source Credibility — hardcoded publisher reputation lookup
+# (no model needed; simple dictionary of known domains)
+# =====================================================================
+
+SOURCE_REPUTATION = {
+    # ---- High credibility: established wire services / mainstream outlets ----
+    "reuters.com": ("High", 92, "International wire service with strict editorial and fact-checking standards."),
+    "apnews.com": ("High", 92, "Associated Press — long-standing wire service with a strong accuracy record."),
+    "bbc.com": ("High", 90, "Publicly funded broadcaster with an established editorial code."),
+    "thehindu.com": ("High", 85, "Long-established Indian national daily with a strong editorial desk."),
+    "pib.gov.in": ("High", 90, "Official Government of India press release portal."),
+    "thehindubusinessline.com": ("High", 82, "Business desk of a long-established Indian national daily."),
+    "ndtv.com": ("Medium", 68, "Mainstream Indian news broadcaster; generally reliable, occasional bias criticism."),
+    "indiatoday.in": ("Medium", 65, "Mainstream Indian news outlet; mixed reader-reported bias ratings."),
+    "timesofindia.indiatimes.com": ("Medium", 62, "High-circulation Indian daily; known for some clickbait-style headlines."),
+    "indianexpress.com": ("Medium", 70, "Mainstream Indian daily with a generally solid accuracy record."),
+    # ---- Known low-reliability / satire domains (illustrative examples) ----
+    "theonion.com": ("Satire", 20, "Satirical publication — not intended to be read as factual news."),
+    "infowars.com": ("Low", 12, "Repeatedly fact-checked and found to publish false or misleading claims."),
+    "beforeitsnews.com": ("Low", 10, "User-submitted content site with minimal editorial oversight."),
+    "naturalnews.com": ("Low", 15, "Frequently flagged by fact-checkers for pseudo-scientific health claims."),
+}
+
+
+def normalize_domain(raw):
+    """Turns a full URL or a bare domain into a clean 'example.com' string."""
+    raw = (raw or "").strip().lower()
+    if not raw:
+        return ""
+    if "://" not in raw:
+        raw = "https://" + raw
+    netloc = urlparse(raw).netloc
+    if netloc.startswith("www."):
+        netloc = netloc[4:]
+    return netloc
+
+
+def lookup_source_credibility(raw_input):
+    """Looks a domain up in the SOURCE_REPUTATION dictionary."""
+    domain = normalize_domain(raw_input)
+    if not domain:
+        return None
+    if domain in SOURCE_REPUTATION:
+        label, score, note = SOURCE_REPUTATION[domain]
+        return {"domain": domain, "found": True, "label": label, "score": score, "note": note}
+    return {
+        "domain": domain,
+        "found": False,
+        "label": "Unknown",
+        "score": 50,
+        "note": "This domain isn't in our reputation database yet. Treat with normal caution and verify independently.",
+    }
+
+
+def calculate_trust_score(headline, article_text, models, source_domain=None):
     fake_tok, fake_model = models["fake_news"]
     bias_tok, bias_model = models["bias"]
     click_tok, click_model = models["clickbait"]
@@ -144,7 +249,20 @@ def calculate_trust_score(headline, article_text, models):
     bias_score = (1 - bias_result["bias_score"]) * 100
     clickbait_score = (1 - clickbait_result["clickbait_score"]) * 100
 
-    trust_score = (fake_news_score * 0.5) + (bias_score * 0.3) + (clickbait_score * 0.2)
+    # ---- New: fold in Source Credibility if a publisher domain was provided ----
+    source_result = lookup_source_credibility(source_domain) if source_domain else None
+
+    if source_result:
+        weights = {"fake_news": 0.40, "bias": 0.25, "clickbait": 0.15, "source": 0.20}
+        trust_score = (
+            fake_news_score * weights["fake_news"]
+            + bias_score * weights["bias"]
+            + clickbait_score * weights["clickbait"]
+            + source_result["score"] * weights["source"]
+        )
+    else:
+        weights = {"fake_news": 0.50, "bias": 0.30, "clickbait": 0.20}
+        trust_score = (fake_news_score * weights["fake_news"]) + (bias_score * weights["bias"]) + (clickbait_score * weights["clickbait"])
 
     if trust_score >= 70:
         risk_level, color = "Low Risk", "green"
@@ -160,14 +278,117 @@ def calculate_trust_score(headline, article_text, models):
         reasons.append("Language shows signs of political or emotional bias.")
     if clickbait_result["prediction"] == "Clickbait":
         reasons.append("Headline uses sensational or clickbait-style language.")
+    if source_result and source_result["found"] and source_result["label"] in ("Low", "Satire"):
+        reasons.append(f"Publisher domain ({source_result['domain']}) has a history of low reliability.")
     if not reasons:
         reasons.append("No major credibility red flags detected.")
 
     return {
         "trust_score": round(trust_score, 2), "risk_level": risk_level, "color": color,
         "fake_news": fake_result, "bias": bias_result, "clickbait": clickbait_result,
+        "source": source_result, "weights": weights,
+        "category_scores": {"fake_news": fake_news_score, "bias": bias_score, "clickbait": clickbait_score,
+                             **({"source": source_result["score"]} if source_result else {})},
         "reasons": reasons,
     }
+
+
+# =====================================================================
+# NEW: Downloadable PDF Trust Report
+# =====================================================================
+
+def generate_trust_report_pdf(headline, article_text, result):
+    """Builds a one-page PDF summary of a trust check, returned as a BytesIO buffer."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("Pure Press — Trust Score Report", styles["Title"]))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", styles["Normal"]))
+    story.append(Spacer(1, 16))
+
+    story.append(Paragraph(f"<b>Headline:</b> {headline}", styles["Normal"]))
+    story.append(Spacer(1, 8))
+    snippet = article_text.strip()
+    if len(snippet) > 700:
+        snippet = snippet[:700] + " ..."
+    story.append(Paragraph(f"<b>Article excerpt:</b> {snippet}", styles["Normal"]))
+    story.append(Spacer(1, 18))
+
+    story.append(Paragraph(f"<b>Trust Score:</b> {result['trust_score']} / 100", styles["Heading2"]))
+    story.append(Paragraph(f"<b>Risk Level:</b> {result['risk_level']}", styles["Heading2"]))
+    story.append(Spacer(1, 14))
+
+    table_data = [
+        ["Module", "Prediction", "Confidence"],
+        ["Fake News", result["fake_news"]["prediction"], f"{result['fake_news']['confidence']:.1%}"],
+        ["Bias", result["bias"]["prediction"], f"{result['bias']['bias_score']:.1%}"],
+        ["Clickbait", result["clickbait"]["prediction"], f"{result['clickbait']['clickbait_score']:.1%}"],
+    ]
+    if result.get("source"):
+        table_data.append(["Source Credibility", result["source"]["label"], f"{result['source']['score']}/100"])
+
+    table = Table(table_data, hAlign="LEFT", colWidths=[160, 160, 120])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#6d28d9")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 18))
+
+    story.append(Paragraph("Explainable AI — Why this result", styles["Heading3"]))
+    for r in result["reasons"]:
+        story.append(Paragraph(f"• {r}", styles["Normal"]))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+# =====================================================================
+# NEW: Visual score-breakdown charts (donut + bar)
+# =====================================================================
+
+def render_score_charts(result):
+    """Renders a donut chart (weighted contribution) and a bar chart (raw scores)."""
+    cat_scores = result["category_scores"]
+    weights = result["weights"]
+
+    label_map = {"fake_news": "Fake News", "bias": "Bias", "clickbait": "Clickbait", "source": "Source"}
+    color_map = {"fake_news": "#6d28d9", "bias": "#2563eb", "clickbait": "#db2777", "source": "#059669"}
+
+    labels = [label_map[k] for k in cat_scores]
+    raw_values = [cat_scores[k] for k in cat_scores]
+    contributions = [cat_scores[k] * weights[k] for k in cat_scores]
+    chart_colors = [color_map[k] for k in cat_scores]
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        fig1, ax1 = plt.subplots(figsize=(4, 4))
+        ax1.pie(
+            contributions, labels=labels, autopct="%1.0f%%",
+            colors=chart_colors, wedgeprops={"width": 0.42, "edgecolor": "white"},
+        )
+        ax1.set_title("How Each Module Contributed\nto the Trust Score")
+        st.pyplot(fig1)
+
+    with col2:
+        fig2, ax2 = plt.subplots(figsize=(4, 4))
+        ax2.barh(labels, raw_values, color=chart_colors)
+        ax2.set_xlim(0, 100)
+        ax2.set_xlabel("Score (0–100, higher = more trustworthy)")
+        ax2.set_title("Raw Score per Category")
+        for i, v in enumerate(raw_values):
+            ax2.text(v + 1.5, i, f"{v:.0f}", va="center", fontsize=9)
+        st.pyplot(fig2)
 
 
 # =====================================================================
@@ -263,8 +484,8 @@ MODULES = [
      "desc": "BERT-based Fake/Real classification", "status": "active",
      "detail": "Uses a fine-tuned BERT model trained on 44,000+ labeled news articles (ISOT dataset) to classify whether an article is fake or real, with a confidence score."},
     {"id": "source_cred", "icon": "🏛️", "title": "Source Credibility",
-     "desc": "Publisher trust rating lookup", "status": "basic",
-     "detail": "Cross-references the publisher domain against MBFC-style credibility and bias ratings to flag low-reliability sources."},
+     "desc": "Publisher trust rating lookup", "status": "active",
+     "detail": "Cross-references the publisher domain against a curated reputation database to flag low-reliability sources. When a publisher is provided during a trust check, this score also feeds directly into the overall Trust Score."},
     {"id": "bias", "icon": "⚖️", "title": "Bias Detection",
      "desc": "Political & emotional bias analysis", "status": "active",
      "detail": "Trained on the MBIC dataset (1,500+ hand-labeled sentences) to detect politically or emotionally biased language in news text."},
@@ -791,15 +1012,19 @@ def render_signup():
 
 
 def render_navbar():
-    nav_l, nav_r = st.columns([4, 1.4])
+    nav_l, nav_r = st.columns([4, 2.2] if st.session_state.logged_in else [4, 1.4])
     with nav_l:
         st.markdown('<div class="navbar-brand">📰 PURE PRESS <span>Daily Intelligence</span></div>', unsafe_allow_html=True)
     with nav_r:
         if st.session_state.logged_in:
-            b1, b2 = st.columns(2)
+            b1, b2, b3 = st.columns([1.3, 1, 1])
             with b1:
                 st.markdown(f'<div class="nav-user">👋 {st.session_state.username}</div>', unsafe_allow_html=True)
             with b2:
+                if st.button("📊 History", key="nav_history", use_container_width=True):
+                    go_to("history")
+                    st.rerun()
+            with b3:
                 if st.button("Logout", key="nav_logout", use_container_width=True):
                     st.session_state.logged_in = False
                     st.session_state.username = ""
@@ -1223,6 +1448,16 @@ def render_trust_check(mod):
                     key=f"image_preview_{mod['id']}",
                 )
 
+    # ---- New: optional publisher domain, feeds Source Credibility into the score ----
+    publisher_input = st.text_input(
+        "Publisher URL or domain (optional)",
+        placeholder="e.g. reuters.com or https://www.bbc.com/news/...",
+        key=f"publisher_{mod['id']}",
+        help="If provided, the publisher's reputation is looked up and blended into the Trust Score.",
+    )
+
+    result_key = f"result_{mod['id']}"
+
     if st.button("Check Trust Score", type="primary"):
         # Re-read the (possibly user-edited) extracted text from the preview boxes
         if input_mode == "📄 Upload PDF" and pdf_file is not None:
@@ -1241,30 +1476,67 @@ def render_trust_check(mod):
         else:
             with st.spinner("Analyzing..."):
                 full_text = headline_input + " " + article_text
-                result = calculate_trust_score(headline_input, full_text, models)
+                result = calculate_trust_score(headline_input, full_text, models, source_domain=publisher_input)
 
-            st.markdown("---")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Trust Score", f"{result['trust_score']}/100")
-            with col2:
-                st.markdown(f"### :{result['color']}[{result['risk_level']}]")
-            st.progress(result["trust_score"] / 100)
+            # Persist across reruns so the download button below doesn't wipe the results
+            st.session_state[result_key] = {
+                "result": result,
+                "headline": headline_input,
+                "article_text": article_text,
+            }
 
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.write("**Fake News**")
-                st.write(f"`{result['fake_news']['prediction']}` ({result['fake_news']['confidence']:.1%})")
-            with c2:
-                st.write("**Bias**")
-                st.write(f"`{result['bias']['prediction']}` ({result['bias']['bias_score']:.1%})")
-            with c3:
-                st.write("**Clickbait**")
-                st.write(f"`{result['clickbait']['prediction']}` ({result['clickbait']['clickbait_score']:.1%})")
+            # ---- New: Analysis History — save this check for the logged-in user ----
+            if st.session_state.logged_in:
+                save_history(
+                    st.session_state.username, mod["title"],
+                    headline_input, result["trust_score"], result["risk_level"],
+                )
 
-            st.markdown("### 💡 Explainable AI — Why this result?")
-            for r in result["reasons"]:
-                st.write(f"- {r}")
+    # ---- Render the most recent result for this module (persists across reruns) ----
+    if result_key in st.session_state:
+        saved = st.session_state[result_key]
+        result = saved["result"]
+
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Trust Score", f"{result['trust_score']}/100")
+        with col2:
+            st.markdown(f"### :{result['color']}[{result['risk_level']}]")
+        st.progress(result["trust_score"] / 100)
+
+        cols = st.columns(4 if result.get("source") else 3)
+        with cols[0]:
+            st.write("**Fake News**")
+            st.write(f"`{result['fake_news']['prediction']}` ({result['fake_news']['confidence']:.1%})")
+        with cols[1]:
+            st.write("**Bias**")
+            st.write(f"`{result['bias']['prediction']}` ({result['bias']['bias_score']:.1%})")
+        with cols[2]:
+            st.write("**Clickbait**")
+            st.write(f"`{result['clickbait']['prediction']}` ({result['clickbait']['clickbait_score']:.1%})")
+        if result.get("source"):
+            with cols[3]:
+                st.write("**Source**")
+                st.write(f"`{result['source']['label']}` ({result['source']['score']}/100) — {result['source']['domain']}")
+
+        st.markdown("### 💡 Explainable AI — Why this result?")
+        for r in result["reasons"]:
+            st.write(f"- {r}")
+
+        # ---- New: Visual charts ----
+        st.markdown("### 📊 Score Breakdown")
+        render_score_charts(result)
+
+        # ---- New: Downloadable PDF report ----
+        pdf_buffer = generate_trust_report_pdf(saved["headline"], saved["article_text"], result)
+        st.download_button(
+            "⬇️ Download Trust Report (PDF)",
+            data=pdf_buffer,
+            file_name=f"trust_report_{mod['id']}.pdf",
+            mime="application/pdf",
+            key=f"download_{mod['id']}",
+        )
 
 
 def render_propagation(mod):
@@ -1278,6 +1550,60 @@ def render_propagation(mod):
         st.dataframe(df.groupby(["source", "label"])["tweet_count"].mean().reset_index())
     except FileNotFoundError:
         st.error("Propagation analysis file not found.")
+
+
+# =====================================================================
+# NEW: Standalone Source Credibility check
+# =====================================================================
+
+def render_source_credibility(mod):
+    render_module_header(mod)
+    st.write("Enter a publisher's website or a specific article URL to check its track record.")
+
+    raw = st.text_input("Publisher URL or domain", placeholder="e.g. bbc.com or https://www.bbc.com/news/...")
+
+    if st.button("Check Source Credibility", type="primary"):
+        if not raw:
+            st.warning("Please enter a URL or domain.")
+        else:
+            result = lookup_source_credibility(raw)
+            color = {"High": "green", "Medium": "orange", "Low": "red", "Satire": "orange", "Unknown": "orange"}.get(result["label"], "orange")
+
+            st.markdown("---")
+            st.markdown(f"### Domain: `{result['domain']}`")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Credibility Score", f"{result['score']}/100")
+            with col2:
+                st.markdown(f"### :{color}[{result['label']}]")
+            st.progress(result["score"] / 100)
+            st.write(result["note"])
+            if not result["found"]:
+                st.info("This database currently covers a curated list of well-known publishers. More sources are being added over time.")
+
+
+# =====================================================================
+# NEW: Analysis History dashboard
+# =====================================================================
+
+def render_history_page():
+    st.button("← Back to Home", on_click=go_to, args=("home",))
+    st.markdown('<div class="section-title">📊 My Analysis History</div><div class="section-line"></div>', unsafe_allow_html=True)
+
+    if not st.session_state.logged_in:
+        st.info("Please log in to see your past trust checks.")
+        return
+
+    rows = get_history(st.session_state.username)
+    if not rows:
+        st.info("You haven't run any trust checks yet. Try one of the modules from the home page!")
+        return
+
+    df = pd.DataFrame(rows, columns=["Module", "Headline", "Trust Score", "Risk Level", "Checked At"])
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    avg_score = df["Trust Score"].mean()
+    st.metric("Average Trust Score (all your checks)", f"{avg_score:.1f}/100")
 
 
 def render_placeholder(mod):
@@ -1300,5 +1626,9 @@ elif page in ["fake_news", "bias", "clickbait", "explainable"]:
     render_trust_check(MODULE_MAP[page])
 elif page == "propagation":
     render_propagation(MODULE_MAP[page])
-elif page in ["source_cred", "cross_verify", "multilingual", "realtime"]:
+elif page == "source_cred":
+    render_source_credibility(MODULE_MAP[page])
+elif page == "history":
+    render_history_page()
+elif page in ["cross_verify", "multilingual", "realtime"]:
     render_placeholder(MODULE_MAP[page])
