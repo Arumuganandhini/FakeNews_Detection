@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import {
+  Newspaper, Columns2, HelpCircle, LineChart, LogOut, LogIn, UserPlus
+} from 'lucide-react';
 import '../styles/Navbar.css';
 
 const logoImg = '/logo.png';
@@ -49,24 +52,31 @@ const Navbar = ({ user, setUser }) => {
               className={`nav-link ${activeLink === 'categories' ? 'active' : ''}`}
               onClick={handleCategoryClick}
             >
-              <i className="fas fa-newspaper"></i> Categories
+              <Newspaper size={15} /> Categories
+            </Link>
+            <Link
+              to="/compare"
+              className={`nav-link ${activeLink === 'compare' ? 'active' : ''}`}
+              onClick={() => handleLinkClick('compare')}
+            >
+              <Columns2 size={15} /> Compare
             </Link>
             <Link
               to="/prompt-quiz"
               className={`nav-link ${activeLink === 'prompt-quiz' ? 'active' : ''}`}
               onClick={() => handleLinkClick('prompt-quiz')}
             >
-              <i className="fas fa-question-circle"></i> Quiz
+              <HelpCircle size={15} /> Quiz
             </Link>
             <Link
               to="/dashboard"
               className={`nav-link ${activeLink === 'dashboard' ? 'active' : ''}`}
               onClick={() => handleLinkClick('dashboard')}
             >
-              <i className="fas fa-chart-line"></i> Dashboard
+              <LineChart size={15} /> Dashboard
             </Link>
             <button onClick={handleLogout} className="logout-btn">
-              <i className="fas fa-sign-out-alt"></i> Logout
+              <LogOut size={15} /> Logout
             </button>
           </>
         ) : (
@@ -76,14 +86,14 @@ const Navbar = ({ user, setUser }) => {
               className={`nav-link ${activeLink === 'login' ? 'active' : ''}`}
               onClick={() => handleLinkClick('login')}
             >
-              <i className="fas fa-sign-in-alt"></i> Login
+              <LogIn size={15} /> Login
             </Link>
             <Link
               to="/signup"
               className={`nav-link ${activeLink === 'signup' ? 'active' : ''}`}
               onClick={() => handleLinkClick('signup')}
             >
-              <i className="fas fa-user-plus"></i> Signup
+              <UserPlus size={15} /> Signup
             </Link>
           </>
         )}

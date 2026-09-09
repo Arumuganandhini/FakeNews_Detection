@@ -40,7 +40,12 @@ exports.getPersonalizedNews = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error fetching personalized news:', error);
-    res.status(500).json({ error: 'Failed to fetch personalized news' });
+    console.error('Error fetching personalized news:', error.message);
+    // Pass through the explained reason (quota reached, key invalid) rather
+    // than flattening every cause into one unhelpful server error.
+    res.status(error.httpStatus || 500).json({
+      error: error.message || 'Failed to fetch personalized news',
+      code: error.code || 'NEWS_ERROR'
+    });
   }
 }; 

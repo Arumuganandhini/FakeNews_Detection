@@ -6,16 +6,21 @@ const quizSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  // Articles come from a news feed, not from a local collection — every other
+  // model keys them by URL. This was an ObjectId referencing an "Article" model
+  // that does not exist, so every save threw a cast error before reaching the
+  // database.
   articleId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Article',
+    type: String,
     required: true
   },
+  articleTitle: String,
   questions: [{
     question: String,
     options: [String],
-    correctAnswer: String,
-    selectedAnswer: String,
+    // Indices into `options`, matching the quiz format the rest of the app uses.
+    correctAnswer: Number,
+    selectedAnswer: Number,
     isCorrect: Boolean
   }],
   score: {

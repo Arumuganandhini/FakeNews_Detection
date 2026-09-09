@@ -14,15 +14,31 @@ function loadDb() {
   return db;
 }
 
-// Normalize a source name/domain for comparison:
-// lowercase, strip protocol/www, drop punctuation and common suffixes.
-function normalize(str) {
-  return String(str || '')
+// Split a source name or domain into comparable words:
+// lowercase, drop protocol/www/TLD/path, split on punctuation, drop a leading "the".
+function tokenize(str) {
+  const tokens = String(str || '')
     .toLowerCase()
     .replace(/https?:\/\//, '')
     .replace(/^www\./, '')
-    .replace(/\.(com|org|net|in|co\.uk|co|news)(\/.*)?$/, '')
-    .replace(/[^a-z0-9]/g, '');
+    .replace(/\.(com|org|net|in|co\.uk|co)\b.*$/, '')
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  return tokens[0] === 'the' ? tokens.slice(1) : tokens;
+}
+
+// Joined form used for exact comparison ("ABC News" and "abcnews.com" -> "abcnews").
+function joinKey(str) {
+  return tokenize(str).join('');
+}
+
+// True when one name is the other with extra trailing words ("BBC" ~ "BBC News").
+// Matching whole words prevents false hits like "Yahoo Entertainment" ~ "RT",
+// which a plain substring check would wrongly accept.
+function isPrefixMatch(aTokens, bTokens) {
+  if (!aTokens.length || !bTokens.length) return false;
+  const [shorter, longer] = aTokens.length <= bTokens.length ? [aTokens, bTokens] : [bTokens, aTokens];
+  return shorter.every((token, i) => token === longer[i]);
 }
 
 /**
@@ -33,30 +49,40 @@ function normalize(str) {
  */
 function getSourceReputation(sourceName, articleUrl) {
   const { sources, unknownSource } = loadDb();
-  const normName = normalize(sourceName);
+  const nameKey = joinKey(sourceName);
+  const nameTokens = tokenize(sourceName);
 
-  let normDomain = '';
+  let domainKey = '';
   if (articleUrl) {
     try {
-      normDomain = normalize(new URL(articleUrl).hostname);
+      domainKey = joinKey(new URL(articleUrl).hostname);
     } catch (_) { /* invalid URL — ignore */ }
   }
 
+  const asResult = (entry) => ({
+    score: entry.reliability,
+    bias: entry.bias,
+    type: entry.type,
+    matched: true,
+    matchedName: entry.name,
+    notes: entry.notes || `Rated ${entry.reliability}/10 for factual reporting; editorial lean: ${entry.bias}.`
+  });
+
+  // Pass 1 — exact match on the full name or the article's domain.
   for (const entry of sources) {
-    const candidates = [entry.name, ...(entry.aliases || [])].map(normalize);
-    const nameHit = normName && candidates.some(c =>
-      c === normName || (normName.length > 3 && (c.includes(normName) || normName.includes(c)))
-    );
-    const domainHit = normDomain && candidates.some(c => c === normDomain);
-    if (nameHit || domainHit) {
-      return {
-        score: entry.reliability,
-        bias: entry.bias,
-        type: entry.type,
-        matched: true,
-        matchedName: entry.name,
-        notes: entry.notes || `Rated ${entry.reliability}/10 for factual reporting; editorial lean: ${entry.bias}.`
-      };
+    const candidates = [entry.name, ...(entry.aliases || [])];
+    const hit = candidates.some(c => {
+      const key = joinKey(c);
+      return key && (key === nameKey || key === domainKey);
+    });
+    if (hit) return asResult(entry);
+  }
+
+  // Pass 2 — whole-word prefix match ("BBC" matches "BBC News").
+  for (const entry of sources) {
+    const candidates = [entry.name, ...(entry.aliases || [])];
+    if (candidates.some(c => isPrefixMatch(tokenize(c), nameTokens))) {
+      return asResult(entry);
     }
   }
 

@@ -59,7 +59,10 @@ exports.getQuizStats = async (req, res) => {
     const userId = req.user._id; // Get user ID from auth middleware
 
     const stats = await Quiz.aggregate([
-      { $match: { userId: mongoose.Types.ObjectId(userId) } },
+      // Mongoose 6 made ObjectId a real class: calling it without `new` throws
+      // "Class constructor ObjectId cannot be invoked without 'new'", which
+      // turned every call to this endpoint into a 500.
+      { $match: { userId: new mongoose.Types.ObjectId(userId) } },
       {
         $group: {
           _id: null,

@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Link2, Search } from 'lucide-react';
 import api from '../services/api';
 import NewsCard from '../components/NewsCard';
 import '../styles/HomePage.css';
 
 const HomePage = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [articles, setArticles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,6 +15,11 @@ const HomePage = () => {
   const [personalizedMessage, setPersonalizedMessage] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('general');
   const [currentDate] = useState(new Date());
+  const [trustBadges, setTrustBadges] = useState({});
+  const [linkInput, setLinkInput] = useState('');
+  const [checkingLink, setCheckingLink] = useState(false);
+  const [linkError, setLinkError] = useState('');
+  const [linkPartial, setLinkPartial] = useState(null);
 
   // Get category from URL query parameter
   useEffect(() => {
@@ -57,13 +64,57 @@ const HomePage = () => {
       
       setError(null);
     } catch (err) {
-      setError('Failed to load news. Please try again later.');
+      // The backend explains recoverable causes (a used-up daily quota, a bad
+      // key). Show that rather than a generic failure the reader can't act on.
+      setError(err.response?.data?.error || 'Failed to load news. Please try again later.');
       console.error('News fetch error:', err);
     } finally {
       setIsLoading(false);
       setInitialLoad(false);
     }
   }, [selectedCategory]);
+
+  // Trust stamps for the visible clippings. Cheap on the server (cache lookup
+  // plus the source database), so every card can carry a verdict without the
+  // reader clicking anything.
+  useEffect(() => {
+    if (!articles.length) return;
+    let cancelled = false;
+
+    api.post('/ai/trust-badges', {
+      articles: articles.map(a => ({ url: a.url, source: a.source }))
+    })
+      .then(res => {
+        if (cancelled) return;
+        const map = {};
+        (res.data.badges || []).forEach(b => { if (b.url) map[b.url] = b; });
+        setTrustBadges(map);
+      })
+      .catch(err => console.error('Trust badge fetch failed:', err));
+
+    return () => { cancelled = true; };
+  }, [articles]);
+
+  // Read a pasted link, then hand it to the article page so it gets exactly
+  // the same treatment as anything from our own feed.
+  const handleCheckLink = async (e) => {
+    e.preventDefault();
+    const url = linkInput.trim();
+    if (!url) return;
+
+    setCheckingLink(true);
+    setLinkError('');
+    setLinkPartial(null);
+    try {
+      const res = await api.post('/ai/extract-article', { url });
+      navigate('/article', { state: { article: res.data.article, startTime: Date.now() } });
+    } catch (err) {
+      setLinkError(err.response?.data?.error || 'We could not check that link. Please try another one.');
+      setLinkPartial(err.response?.data?.partial || null);
+    } finally {
+      setCheckingLink(false);
+    }
+  };
 
   const handleRetry = () => {
     window.location.reload();
@@ -126,6 +177,41 @@ const HomePage = () => {
         <div className="newspaper-tagline">All the News That's Fit to Print</div>
       </div>
       
+      {/* Most misinformation arrives as a forwarded link, not through a feed —
+          so checking one is offered before the day's headlines. */}
+      <section className="wire-desk">
+        <div className="wire-desk-intro">
+          <span className="wire-icon"><Link2 size={16} /></span>
+          <div>
+            <h2 className="wire-title">The Verification Desk</h2>
+            <p className="wire-strapline">
+              Sent a news link on WhatsApp or social media? Submit it for checking.
+            </p>
+          </div>
+        </div>
+
+        <form className="wire-form" onSubmit={handleCheckLink}>
+          <input
+            type="url"
+            value={linkInput}
+            onChange={(e) => setLinkInput(e.target.value)}
+            placeholder="https://example.com/news-article"
+            aria-label="Paste a news link to check"
+            disabled={checkingLink}
+          />
+          <button type="submit" disabled={checkingLink || !linkInput.trim()}>
+            <Search size={14} /> {checkingLink ? 'Reading…' : 'Check it'}
+          </button>
+        </form>
+
+        {linkError && (
+          <div className="wire-notice">
+            <strong>{linkError}</strong>
+            {linkPartial && <span className="wire-partial">{linkPartial.note}</span>}
+          </div>
+        )}
+      </section>
+
       <div className="newspaper-categories">
         <div className="category-label">SECTIONS:</div>
         <div className="categories-list">
@@ -214,7 +300,7 @@ const HomePage = () => {
       ) : (
         <div className="newspaper-grid">
           {articles.map((article, index) => (
-            <NewsCard key={index} article={article} />
+            <NewsCard key={index} article={article} trustBadge={trustBadges[article.url]} />
           ))}
         </div>
       )}

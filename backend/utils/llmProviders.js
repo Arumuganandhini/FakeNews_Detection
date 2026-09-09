@@ -1,0 +1,229 @@
+// backend/utils/llmProviders.js
+//
+// Where the language model actually lives.
+//
+// The pipeline was written against NVIDIA NIM, which is free and, until its
+// popularity caught up with it, fast. It is now frequently congested: the same
+// call has been measured at 2 seconds and at 62 seconds, and 503 "model busy"
+// replies are routine. That congestion — not the pipeline, not the prompts — is
+// the dominant cost in an analysis.
+//
+// NIM stays the default: it is the most available option and needs no billing
+// account. This module simply stops it being the *only* option, so a second
+// provider can take over while NIM is struggling and hand back afterwards.
+//
+// Adding a provider means adding one entry here. Nothing above this file knows
+// which one answered.
+const axios = require('axios');
+
+/* -------------------------------------------------------------------------
+   Error classification, shared across providers
+   ------------------------------------------------------------------------- */
+
+/** Gone for good — switch away permanently. */
+const isRetired = (status) => status === 404 || status === 410;
+
+/** Busy right now, not retired — worth waiting before reaching for a backup. */
+const isOverloaded = (status) => status === 503 || status === 529;
+
+/** The caller is over its allowance — back off, then retry. */
+const isRateLimited = (status) => status === 429;
+
+/** Bad or missing credentials — retrying will never help. */
+const isAuthFailure = (status) => status === 401 || status === 403;
+
+/** Connection-level failures (timeout, reset) — worth failing over. */
+const isConnectionFailure = (code) =>
+  ['ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN'].includes(code);
+
+/* -------------------------------------------------------------------------
+   NVIDIA NIM — the default
+   ------------------------------------------------------------------------- */
+
+const NIM_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
+
+// Hosted models get retired. meta/llama-3.1-8b-instruct reached end of life and
+// every analysis began failing with HTTP 410, so the model is configurable and
+// these backups are tried automatically. Only models that actually respond
+// belong on this list.
+const NIM_MODELS = [
+  process.env.NIM_MODEL_NAME || 'nvidia/nemotron-3-super-120b-a12b',
+  'nvidia/ising-calibration-1.5-31b',
+  'google/diffusiongemma-26b-a4b-it'
+];
+
+const nim = {
+  name: 'nim',
+  label: 'NVIDIA NIM',
+  models: [...new Set(NIM_MODELS)],
+  // How many calls this provider tolerates at once. NIM degrades under load:
+  // six parallel calls measured *slower* end to end (98s) than two (63s), so it
+  // is deliberately kept narrow.
+  concurrency: 2,
+  isConfigured: () => Boolean(process.env.NIM_API_KEY),
+  missingKeyMessage: 'NIM_API_KEY is not set. Add it to your backend .env file.',
+
+  async send({ model, prompt, maxTokens, temperature, topP, timeout }) {
+    const response = await axios.post(NIM_URL, {
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: maxTokens,
+      temperature,
+      top_p: topP,
+      stream: false
+    }, {
+      headers: {
+        Authorization: `Bearer ${process.env.NIM_API_KEY}`,
+        Accept: 'application/json'
+      },
+      timeout
+    });
+
+    const text = response.data?.choices?.[0]?.message?.content;
+    if (!text) throw new Error('Invalid response format from NVIDIA NIM.');
+    return text.trim();
+  }
+};
+
+/* -------------------------------------------------------------------------
+   Google Gemini — the alternative
+   ------------------------------------------------------------------------- */
+
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+// Google retires models while still listing them, exactly as NVIDIA does — the
+// 2.5-flash names answer /models but return 404 "no longer available" on a real
+// request. Measured on the bias task, three runs each:
+//
+//     gemini-3.1-flash-lite   3/3 valid   3.0s best
+//     gemini-flash-latest     2/3 valid   6.8s best
+//     gemini-2.5-flash(-lite) 404, retired
+//
+// The "-latest" alias is kept as the backup because it follows Google's current
+// recommendation and so should outlive any specific version number.
+const GEMINI_MODELS = [
+  process.env.GEMINI_MODEL_NAME || 'gemini-3.1-flash-lite',
+  'gemini-flash-latest'
+];
+
+const gemini = {
+  name: 'gemini',
+  label: 'Google Gemini',
+  models: [...new Set(GEMINI_MODELS)],
+  // Gemini does not degrade the same way. Six identical calls, all valid:
+  //     parallelism 2 -> 37.5s wall
+  //     parallelism 3 ->  7.9s wall
+  //     parallelism 6 ->  9.1s wall
+  // Two was throttling the pipeline nearly five-fold. Six lets every factor in
+  // an analysis run at once.
+  concurrency: 6,
+  isConfigured: () => Boolean(process.env.GEMINI_API_KEY),
+  missingKeyMessage:
+    'GEMINI_API_KEY is not set. Add it to your backend .env file to use Gemini.',
+
+  async send({ model, prompt, maxTokens, temperature, topP, timeout }) {
+    const response = await axios.post(
+      `${GEMINI_BASE}/${model}:generateContent`,
+      {
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature,
+          topP
+        }
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          // Header auth, so the key never appears in a URL or a log line.
+          'x-goog-api-key': process.env.GEMINI_API_KEY
+        },
+        timeout
+      }
+    );
+
+    const candidate = response.data?.candidates?.[0];
+    const text = (candidate?.content?.parts || [])
+      .map(part => part.text || '')
+      .join('')
+      .trim();
+
+    if (!text) {
+      // A blocked or empty candidate is worth naming precisely; it is not a
+      // transport failure and retrying the same prompt will not fix it.
+      const reason = candidate?.finishReason
+        || response.data?.promptFeedback?.blockReason
+        || 'unknown';
+      throw new Error(`Gemini returned no text (finish reason: ${reason}).`);
+    }
+    return text;
+  }
+};
+
+/* -------------------------------------------------------------------------
+   Selection
+   ------------------------------------------------------------------------- */
+
+const PROVIDERS = { nim, gemini };
+
+/**
+ * Resolve the provider order for this process.
+ *
+ * LLM_PROVIDER accepts:
+ *   "nim"            - NIM only (the default, and what a fresh checkout does)
+ *   "gemini"         - Gemini only
+ *   "gemini,nim"     - a comma-separated preference order; the first configured
+ *                      provider leads and the rest are failover targets
+ *
+ * A provider without its key is dropped from the order rather than failing the
+ * process, so setting a preference that is not configured degrades to whatever
+ * is.
+ *
+ * @returns {Array<Object>} providers in the order they should be tried
+ */
+const resolveProviderChain = () => {
+  const requested = String(process.env.LLM_PROVIDER || 'nim')
+    .split(',')
+    .map(name => name.trim().toLowerCase())
+    .filter(Boolean);
+
+  const chain = [];
+  for (const name of requested) {
+    const provider = PROVIDERS[name];
+    if (provider && provider.isConfigured() && !chain.includes(provider)) {
+      chain.push(provider);
+    }
+  }
+
+  // Anything configured but not named becomes a failover target, so a second
+  // key in .env is useful the moment it is added.
+  for (const provider of Object.values(PROVIDERS)) {
+    if (provider.isConfigured() && !chain.includes(provider)) chain.push(provider);
+  }
+
+  return chain;
+};
+
+/**
+ * How many model calls to allow at once, given the provider that leads.
+ * LLM_MAX_CONCURRENT overrides it; NIM_MAX_CONCURRENT is still honoured so an
+ * existing .env keeps working.
+ * @returns {number}
+ */
+const resolveConcurrency = () => {
+  const override = Number(process.env.LLM_MAX_CONCURRENT || process.env.NIM_MAX_CONCURRENT);
+  if (Number.isFinite(override) && override > 0) return override;
+  const [leader] = resolveProviderChain();
+  return leader?.concurrency || 2;
+};
+
+module.exports = {
+  PROVIDERS,
+  resolveProviderChain,
+  resolveConcurrency,
+  isRetired,
+  isOverloaded,
+  isRateLimited,
+  isAuthFailure,
+  isConnectionFailure
+};

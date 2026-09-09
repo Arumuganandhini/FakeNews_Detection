@@ -1,108 +1,82 @@
 // agents/promptQuizAgent.js
-const { callNimApi } = require('../utils/nvidiaNimApi');
+//
+// Quiz generated from a topic the reader types in, grounded in retrieved
+// context (Wikipedia plus a local context file) rather than model memory.
+//
+// Same history as quizAgent: a greedy /\{[\s\S]*\}/ regex parsed the reply, and
+// any failure fell through to five hard-coded questions whose options read
+// "Option A / Option B / Option C / Option D". That fallback is what a reader
+// actually saw when the parse failed — a quiz that looked real and tested
+// nothing — so it is gone. The shared JSON path handles the parsing, and a real
+// failure is raised for the page to report.
+const { callNimApiJson } = require('../utils/nvidiaNimApi');
 const { fetchContext } = require('../rag/ragPipeline');
 
+/** Reject anything shaped like a quiz but carrying placeholder text. */
+const isPlaceholder = (q) =>
+  !q.question ||
+  /^option [a-d]$/i.test(String(q.options?.[0] || '')) ||
+  q.options.every((o, i) => String(o).trim() === `Option ${'ABCD'[i]}`);
+
+/**
+ * Build a five-question quiz about a reader-supplied topic.
+ * @param {string} userPrompt - the topic the reader asked about
+ * @returns {Promise<{questions: Array, contextUsed: number}>}
+ * @throws when the model cannot produce a usable quiz
+ */
 const generatePromptQuiz = async (userPrompt) => {
+  // Retrieval first, so questions rest on sourced text rather than recall.
+  let context = [];
   try {
-    // Fetch relevant context using RAG
-    const context = await fetchContext({ 
-      title: userPrompt, 
-      content: userPrompt, 
-      source: 'User Prompt' 
-    });
-    
-    // Format context for the prompt
-    const contextText = context
-      .map(item => `- ${item.snippet} (Source: ${item.link})`)
-      .join('\n');
-    
-    const prompt = `
-You are a helpful educational assistant. Generate a quiz with 5 multiple-choice questions based on the following user prompt and context.
-Each question should have 4 options (A, B, C, D) with only one correct answer.
-Format the response as a JSON object with the following structure:
+    context = await fetchContext({ title: userPrompt, content: userPrompt, source: 'User Prompt' });
+  } catch (err) {
+    console.warn('Prompt quiz retrieval failed, continuing without context:', err.message);
+  }
+
+  const contextText = (context || [])
+    .map(item => `- ${item.snippet}${item.link ? ` (Source: ${item.link})` : ''}`)
+    .join('\n');
+
+  const prompt = `You are a quiz writer. Write 5 multiple-choice questions on the topic below.
+
+Rules:
+- Ground the questions in the reference material where it is relevant.
+- Give exactly 4 answer options, and make the wrong ones plausible.
+- Use the real subject matter — never placeholder text like "Option A".
+- "correctAnswer" is the 0-based index of the correct option.
+
+Respond with ONLY a JSON object, no other text:
 {
   "questions": [
-    {
-      "question": "Question text here",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswer": 0 (index of the correct option, 0-3)
-    },
-    ...
+    { "question": "<question text>", "options": ["<a>", "<b>", "<c>", "<d>"], "correctAnswer": <0-3> }
   ]
 }
 
-User Prompt: ${userPrompt}
+Topic: ${userPrompt}
 
-Relevant Context:
-${contextText}
-`;
+Reference material:
+${contextText || '(none retrieved — rely on well-established general knowledge)'}`;
 
-    const response = await callNimApi(prompt);
-    
-    // Parse the response to ensure it's valid JSON
-    try {
-      // Extract JSON from the response if needed
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      const jsonStr = jsonMatch ? jsonMatch[0] : response;
-      const quizData = JSON.parse(jsonStr);
-      
-      // Validate the structure
-      if (!quizData.questions || !Array.isArray(quizData.questions) || quizData.questions.length !== 5) {
-        throw new Error('Invalid quiz format');
-      }
-      
-      // Ensure each question has the required fields
-      quizData.questions = quizData.questions.map((q, index) => {
-        if (!q.question || !q.options || !Array.isArray(q.options) || q.options.length !== 4 || q.correctAnswer === undefined) {
-          console.error(`Invalid question format at index ${index}:`, q);
-          // Return a default question if the format is invalid
-          return {
-            question: `Question ${index + 1} about ${userPrompt}`,
-            options: ["Option A", "Option B", "Option C", "Option D"],
-            correctAnswer: 0
-          };
-        }
-        return q;
-      });
-      
-      return quizData;
-    } catch (error) {
-      console.error('Error parsing quiz data:', error);
-      // Return a default quiz with 5 questions if parsing fails
-      return {
-        questions: [
-          {
-            question: "What is the main topic of the prompt?",
-            options: ["Option A", "Option B", "Option C", "Option D"],
-            correctAnswer: 0
-          },
-          {
-            question: "According to the context, what is the most important point?",
-            options: ["Option A", "Option B", "Option C", "Option D"],
-            correctAnswer: 1
-          },
-          {
-            question: "What conclusion can be drawn from the information?",
-            options: ["Option A", "Option B", "Option C", "Option D"],
-            correctAnswer: 2
-          },
-          {
-            question: "What evidence is provided in the context?",
-            options: ["Option A", "Option B", "Option C", "Option D"],
-            correctAnswer: 3
-          },
-          {
-            question: "What is the perspective on the topic in the context?",
-            options: ["Option A", "Option B", "Option C", "Option D"],
-            correctAnswer: 0
-          }
-        ]
-      };
-    }
-  } catch (error) {
-    console.error('Error generating prompt quiz:', error);
-    throw error;
+  const data = await callNimApiJson(prompt, { maxTokens: 2600, temperature: 0.3 });
+  const questions = Array.isArray(data?.questions) ? data.questions : [];
+
+  const usable = questions.filter(q =>
+    q &&
+    typeof q.question === 'string' &&
+    Array.isArray(q.options) &&
+    q.options.length === 4 &&
+    Number.isInteger(q.correctAnswer) &&
+    q.correctAnswer >= 0 && q.correctAnswer <= 3 &&
+    !isPlaceholder(q)
+  );
+
+  // The stored quiz schema and the page both expect a full set of five, so
+  // a short reply is a failure to retry, not a quiz to serve.
+  if (usable.length < 5) {
+    throw new Error(`Quiz generation produced ${usable.length} usable question(s) of ${questions.length}`);
   }
+
+  return { questions: usable.slice(0, 5), contextUsed: (context || []).length };
 };
 
-module.exports = generatePromptQuiz; 
+module.exports = generatePromptQuiz;

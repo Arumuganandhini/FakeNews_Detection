@@ -1,590 +1,319 @@
-/* Base Styles with Vintage Newspaper Theme */
+/* The Daily Examiner — practice quiz set as a newspaper examination page.
+   Same sheet, masthead and rules as the front page. */
 .prompt-quiz-page {
-  max-width: 800px;
-  margin: 0 auto;
+  max-width: 900px;
+  margin: 2rem auto;
   padding: 2rem;
-  font-family: "Times New Roman", Times, serif;
-  background-color: #f8f5e6;
-  color: #222;
-  animation: fadeIn 0.5s ease-in-out;
-  min-height: 100vh;
-}
-
-.prompt-quiz-page h1 {
-  font-family: "Times New Roman", Times, serif;
-  font-size: 2.5rem;
-  font-weight: bold;
-  text-align: center;
-  margin-bottom: 1rem;
-  border-bottom: 3px double #222;
-  padding-bottom: 0.5rem;
-  letter-spacing: -0.5px;
-  text-transform: uppercase;
-}
-
-.prompt-quiz-page h2 {
-  font-family: "Times New Roman", Times, serif;
-  font-size: 1.8rem;
-  font-weight: bold;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid #222;
-  padding-bottom: 0.5rem;
-}
-
-.prompt-quiz-page h3 {
-  font-family: "Times New Roman", Times, serif;
-  font-size: 1.4rem;
-  font-weight: bold;
-  margin: 1.5rem 0 1rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-/* Quiz Description */
-.quiz-description {
-  font-family: Georgia, serif;
-  font-size: 1.1rem;
-  line-height: 1.6;
-  margin-bottom: 1.5rem;
-  text-align: justify;
-  column-count: 2;
-  column-gap: 2rem;
-  column-rule: 1px solid #ddd;
-}
-
-/* Forms and Inputs */
-.prompt-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-top: 1.5rem;
-  border: 1px solid #222;
-  padding: 1.5rem;
-  background-color: #fff;
-}
-
-.prompt-input {
-  width: 100%;
-  padding: 1rem;
-  border: 1px solid #888;
-  font-family: Georgia, serif;
-  font-size: 1rem;
-  resize: vertical;
-  min-height: 120px;
-  transition: border-color 0.3s ease;
-  background-color: #fffdf9;
-}
-
-.prompt-input:focus {
-  outline: none;
-  border-color: #222;
-}
-
-/* Buttons */
-.submit-button {
-  padding: 0.5rem 1rem;
-  border: 2px solid #333;
-  border-radius: 0;
-  background-color: #f8f5e6;
-  color: #333;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-family: "Times New Roman", Times, serif;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  transition: all 0.2s ease;
-  align-self: center;
-  margin-top: 0.5rem;
-}
-
-.submit-button:hover {
-  background-color: #222;
-  color: #f8f5e6;
-}
-
-.submit-button:disabled {
-  background-color: #cccccc;
-  border-color: #999;
-  color: #666;
-  cursor: not-allowed;
-}
-
-/* Loading State */
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-  gap: 1rem;
-  border: 1px solid #222;
-  background-color: #fff;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #ddd;
-  border-top: 4px solid #222;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.loading-text {
-  color: #333;
-  font-size: 1.1rem;
-  font-family: "Times New Roman", Times, serif;
-  font-style: italic;
-}
-
-/* Error State */
-.error-message {
-  color: #730000;
-  text-align: center;
-  padding: 1rem;
-  background-color: #fff;
-  border: 1px solid #730000;
-  margin: 1rem 0;
-  font-family: Georgia, serif;
-}
-
-/* Quiz Container */
-.quiz-container {
-  background-color: white;
-  padding: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border: 1px solid #222;
-}
-
-.question-progress {
-  text-align: center;
-  color: #7f8c8d;
-  margin-bottom: 1rem;
-  font-family: Georgia, serif;
-}
-
-.question-container {
-  margin: 2rem 0;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #ddd;
-}
-
-.question {
-  font-size: 1.3rem;
-  margin-bottom: 1.5rem;
-  color: #222;
-  font-family: Georgia, serif;
-  line-height: 1.4;
-}
-
-/* Answers */
-.answers-container {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-}
-
-.answer-button {
-  padding: 1rem;
-  background-color: #fff;
-  border: 1px solid #888;
-  text-align: left;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-family: Georgia, serif;
-}
-
-.answer-button:hover {
-  background-color: #f0f0f0;
-}
-
-.answer-button.selected {
-  background-color: #f0f0f0;
-  border: 1px solid #222;
-  font-weight: bold;
-}
-
-/* Navigation Buttons */
-.next-button {
-  width: 100%;
-  padding: 0.8rem;
-  background-color: #222;
-  color: white;
-  border: none;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-  text-transform: uppercase;
-  font-family: "Times New Roman", Times, serif;
-  letter-spacing: 1px;
-  margin-top: 1rem;
-}
-
-.next-button:hover:not(:disabled) {
-  background-color: #444;
-}
-
-.next-button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-/* Results Container */
-.results-container {
-  background-color: white;
-  padding: 2rem;
-  border: 1px solid #222;
   position: relative;
+  background-color: var(--paper-card);
+  border: 1px solid var(--rule-strong);
+  box-shadow: 0 5px 25px rgba(26, 26, 26, 0.15);
+  font-family: var(--body-font);
+  color: var(--ink-body);
+  animation: press-fade-in 0.5s ease-out;
 }
-
-.results-container::before {
-  content: "EXTRA! EXTRA!";
+.prompt-quiz-page::before {
+  content: '';
   position: absolute;
-  top: -12px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: #222;
-  color: #f8f5e6;
-  padding: 0.3rem 1rem;
-  font-family: "Times New Roman", Times, serif;
-  font-weight: bold;
-  font-size: 0.8rem;
-  letter-spacing: 1px;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%23c5b793' fill-opacity='0.15' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
 }
-
-.score-display {
-  text-align: center;
-  margin: 2rem 0;
-  font-family: "Times New Roman", Times, serif;
-}
-
-.score {
-  font-size: 3rem;
-  font-weight: bold;
-  color: #222;
-}
-
-.total {
-  font-size: 2rem;
-  color: #666;
-}
-
-.feedback {
-  text-align: center;
-  font-size: 1.2rem;
-  color: #222;
-  margin: 2rem 0;
-  font-family: Georgia, serif;
-  font-style: italic;
-  border-top: 1px solid #ddd;
-  border-bottom: 1px solid #ddd;
-  padding: 1rem 0;
-  line-height: 1.6;
-}
-
-/* Question Results */
-.question-results {
-  margin-top: 2rem;
-}
-
-.question-result {
-  background-color: #fff;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  border: 1px solid #ddd;
-}
-
-.question-result.correct {
-  border-left: 4px solid #005700;
-}
-
-.question-result.incorrect {
-  border-left: 4px solid #730000;
-}
-
-.question-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  font-family: "Times New Roman", Times, serif;
-}
-
-.question-number {
-  font-weight: bold;
-  color: #222;
+.prompt-quiz-page > * { position: relative; z-index: 1; }
+/* ============================== Masthead ================================= */
+.prompt-quiz-page > h1 {
+  font-family: var(--headline-font);
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: -1px;
+  line-height: 1;
+  text-align: center;
+  margin: 0 0 0.5rem;
+  padding-bottom: 1rem;
+  color: var(--ink);
+  text-shadow: 2px 2px 0 rgba(26, 26, 26, 0.1);
+  border-bottom: 3px double var(--ink);
 }
-
-.status {
-  font-weight: bold;
-  font-family: "Times New Roman", Times, serif;
+.prompt-quiz-page .quiz-description {
+  text-align: center;
+  font-style: italic;
+  font-size: 1.02rem;
+  color: var(--ink-soft);
+  margin: 1.25rem 0 1.75rem;
 }
-
-.status.correct {
-  color: #005700;
+/* Section headings get the heavy rule treatment */
+.prompt-quiz-page h2 {
+  font-family: var(--headline-font);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.3px;
+  color: var(--ink);
+  margin: 0 0 1.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--ink);
 }
-
-.status.incorrect {
-  color: #730000;
+.prompt-quiz-page h3 {
+  font-family: var(--headline-font);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 0.5rem;
 }
-
-.question-text {
-  margin-bottom: 1rem;
-  color: #222;
-  font-family: Georgia, serif;
-  font-size: 1.1rem;
-  line-height: 1.4;
-}
-
-.answer-details {
+/* ============================ Prompt form ================================ */
+.prompt-quiz-page .prompt-form {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  font-family: Georgia, serif;
-  border-top: 1px solid #eee;
-  padding-top: 0.8rem;
-}
-
-.selected-answer, .correct-answer {
-  font-size: 1rem;
-}
-
-.selected-answer span.correct {
-  color: #005700;
-  font-weight: bold;
-}
-
-.selected-answer span.incorrect {
-  color: #730000;
-  font-weight: bold;
-}
-
-.correct-answer span.correct {
-  color: #005700;
-  font-weight: bold;
-}
-
-/* Action Buttons */
-.action-buttons {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  margin-top: 2rem;
-}
-
-.restart-button, .history-button {
-  padding: 0.8rem;
-  background-color: #222;
-  color: white;
-  border: none;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-  text-transform: uppercase;
-  font-family: "Times New Roman", Times, serif;
-  letter-spacing: 1px;
-  flex: 1;
-}
-
-.restart-button:hover, .history-button:hover {
-  background-color: #444;
-}
-
-.history-button {
-  background-color: #333;
-}
-
-/* History Container */
-.history-container {
-  background-color: white;
-  padding: 2rem;
-  border: 1px solid #222;
+  gap: 0.85rem;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  background: var(--paper-aged);
+  border: 1px dashed var(--rule-heavy);
   position: relative;
 }
-
-.history-container h2 {
-  font-family: "Times New Roman", Times, serif;
-  font-size: 1.8rem;
-  font-weight: bold;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid #222;
-  padding-bottom: 0.5rem;
+.prompt-quiz-page .prompt-form::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: 1px dashed var(--rule-heavy);
+  pointer-events: none;
 }
-
-.back-button {
-  padding: 0.5rem 1rem;
-  border: 2px solid #333;
-  border-radius: 0;
-  background-color: #f8f5e6;
-  color: #333;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-family: "Times New Roman", Times, serif;
-  font-weight: bold;
+.prompt-quiz-page .prompt-input {
+  position: relative;
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  font-family: var(--body-font);
+  font-size: 1rem;
+  color: var(--ink-body);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  resize: vertical;
+}
+.prompt-quiz-page .prompt-input::placeholder { color: var(--ink-muted); }
+.prompt-quiz-page .prompt-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.prompt-quiz-page .submit-button, .prompt-quiz-page .history-button, .prompt-quiz-page .back-button, .prompt-quiz-page .restart-button, .prompt-quiz-page .next-button {
+  position: relative;
+  align-self: flex-start;
+  padding: 0.65rem 1.5rem;
+  font-family: var(--label-font);
+  font-size: 0.8rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  transition: all 0.2s ease;
-  margin: 0 auto 1.5rem;
-  display: block;
+  letter-spacing: 0.08em;
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
-
-.back-button:hover {
-  background-color: #222;
-  color: #f8f5e6;
+.prompt-quiz-page .submit-button:hover:not(:disabled), .prompt-quiz-page .history-button:hover, .prompt-quiz-page .back-button:hover, .prompt-quiz-page .restart-button:hover, .prompt-quiz-page .next-button:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
 }
-
-.no-history {
-  text-align: center;
-  color: #666;
-  font-family: Georgia, serif;
-  font-style: italic;
+.prompt-quiz-page .submit-button:disabled, .prompt-quiz-page .next-button:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Secondary actions read as outlined, not solid */
+.prompt-quiz-page .history-button, .prompt-quiz-page .back-button {
+  color: var(--ink);
+  background: transparent;
+  border-color: var(--rule-heavy);
 }
-
-.history-list {
-  display: grid;
-  gap: 1.5rem;
+.prompt-quiz-page .history-button:hover, .prompt-quiz-page .back-button:hover {
+  background: var(--paper-aged);
+  color: var(--ink);
+  border-color: var(--ink);
 }
-
-.history-item {
-  background-color: #fff;
-  padding: 1.5rem;
-  border: 1px solid #ddd;
-}
-
-.history-header {
+.prompt-quiz-page .action-buttons {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+/* ============================== History ================================== */
+.prompt-quiz-page .history-container { margin-top: 2rem; }
+.prompt-quiz-page .history-header {
+  display: flex;
   align-items: center;
-  margin-bottom: 1rem;
-  font-family: "Times New Roman", Times, serif;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
-
-.history-header h3 {
+.prompt-quiz-page .history-list {
+  list-style: none;
   margin: 0;
-  font-size: 1.2rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
-
-.history-date {
-  color: #666;
-  font-size: 0.9rem;
-  font-family: Georgia, serif;
+.prompt-quiz-page .history-item {
+  padding: 0.9rem 0;
+  border-bottom: 1px dotted var(--rule-heavy);
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
-
-.history-prompt {
-  color: #222;
-  font-family: Georgia, serif;
-  margin-bottom: 1rem;
+.prompt-quiz-page .history-item:last-child { border-bottom: none; }.prompt-quiz-page .history-item:hover { background: var(--paper-aged); }
+.prompt-quiz-page .history-prompt {
+  font-family: var(--headline-font);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 0.2rem;
 }
-
-.history-score {
-  display: inline-block;
-  margin-bottom: 1rem;
-  font-family: "Times New Roman", Times, serif;
-}
-
-.history-score .score {
-  font-size: 1.5rem;
-  color: #222;
-}
-
-.history-score .total {
-  font-size: 1.2rem;
-  color: #666;
-}
-
-.history-feedback {
-  color: #222;
-  font-family: Georgia, serif;
+.prompt-quiz-page .history-date {
+  font-size: 0.78rem;
   font-style: italic;
+  color: var(--ink-muted);
 }
-
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.prompt-quiz-page .history-score {
+  font-family: var(--headline-font);
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--ink);
 }
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
+.prompt-quiz-page .history-feedback { font-size: 0.88rem; color: var(--ink-soft); }
+.prompt-quiz-page .no-history {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  font-style: italic;
+  color: var(--ink-soft);
+  background: var(--paper-aged);
+  border: 1px dashed var(--rule-heavy);
 }
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .prompt-quiz-page {
-    padding: 1rem;
-  }
-  
-  .quiz-description {
-    column-count: 1;
-  }
-
-  .quiz-container, .results-container, .history-container {
-    padding: 1.5rem;
-  }
-
-  .question {
-    font-size: 1.1rem;
-  }
-
-  .answer-button {
-    padding: 0.8rem;
-  }
-
-  .score {
-    font-size: 2.5rem;
-  }
-
-  .total {
-    font-size: 1.5rem;
-  }
-
-  .action-buttons {
-    flex-direction: column;
-  }
+/* ============================== Questions ================================ */
+.prompt-quiz-page .question-container {
+  background: var(--paper-aged);
+  border: 1px solid var(--rule-strong);
+  border-left: 4px solid var(--ink);
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
 }
-
-@media (max-width: 480px) {
-  .prompt-quiz-page {
-    padding: 0.5rem;
-  }
-
-  .quiz-container, .results-container, .history-container {
-    padding: 1rem;
-  }
-
-  .question {
-    font-size: 1rem;
-  }
-
-  .answer-button {
-    padding: 0.6rem;
-    font-size: 0.9rem;
-  }
-
-  .score {
-    font-size: 2rem;
-  }
-
-  .total {
-    font-size: 1.2rem;
-  }
-
-  .prompt-quiz-page h1 {
-    font-size: 2rem;
-  }
+.prompt-quiz-page .question {
+  font-family: var(--headline-font);
+  font-size: 1.28rem;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0 0 1.25rem;
+  color: var(--ink);
+}
+.prompt-quiz-page .answers-container { display: flex; flex-direction: column; gap: 0.65rem; }
+.prompt-quiz-page .answer-button {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  font-family: var(--body-font);
+  font-size: 1rem;
+  line-height: 1.45;
+  text-align: left;
+  color: var(--ink-body);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.prompt-quiz-page .answer-button:hover { border-color: var(--ink); background: var(--paper-card); }
+.prompt-quiz-page .answer-button.selected {
+  border-color: var(--ink);
+  border-left-width: 5px;
+  background: var(--paper-card);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--rule-heavy);
+}
+/* =============================== Results ================================= */
+.prompt-quiz-page .score-display {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  background: var(--paper-aged);
+  border-top: 4px double var(--ink);
+  border-bottom: 4px double var(--ink);
+}
+.prompt-quiz-page .score {
+  font-family: var(--headline-font);
+  font-size: 4rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--ink);
+}
+.prompt-quiz-page .total {
+  font-family: var(--headline-font);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.prompt-quiz-page .feedback {
+  text-align: center;
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--ink-soft);
+  margin: 0 0 1.5rem;
+}
+.prompt-quiz-page .question-results { display: flex; flex-direction: column; gap: 1rem; }
+.prompt-quiz-page .question-result {
+  padding: 1rem 1.25rem;
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-left: 4px solid var(--rule-heavy);
+}
+.prompt-quiz-page .question-result.correct { border-left-color: var(--trust-high); }.prompt-quiz-page .question-result.incorrect { border-left-color: var(--press-red); }
+.prompt-quiz-page .question-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.prompt-quiz-page .question-number {
+  font-family: var(--label-font);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-muted);
+}
+.prompt-quiz-page .question-text {
+  font-family: var(--headline-font);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0 0 0.6rem;
+  color: var(--ink);
+}
+.prompt-quiz-page .answer-details { display: flex; flex-direction: column; gap: 0.25rem; }
+.prompt-quiz-page .selected-answer, .prompt-quiz-page .correct-answer {
+  font-size: 0.9rem;
+  margin: 0;
+  color: var(--ink-soft);
+}
+.prompt-quiz-page .correct { color: var(--trust-high); font-weight: 700; }.prompt-quiz-page .incorrect { color: var(--press-red); font-weight: 700; }
+/* ================================ States ================================= */
+.prompt-quiz-page .loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+.prompt-quiz-page .loading-text { font-style: italic; color: var(--ink-soft); margin: 0; }
+.prompt-quiz-page .error-message {
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  background: var(--trust-low-soft);
+  border: 1px dashed var(--press-red);
+  color: var(--press-red);
+}
+@media (max-width: 768px) {.prompt-quiz-page { margin: 1rem 0.75rem; padding: 1.25rem; }.prompt-quiz-page .question-container { padding: 1.1rem; }.prompt-quiz-page .question { font-size: 1.12rem; }.prompt-quiz-page .score { font-size: 3rem; }.prompt-quiz-page .action-buttons { flex-direction: column; }.prompt-quiz-page .action-buttons button { width: 100%; }
 }

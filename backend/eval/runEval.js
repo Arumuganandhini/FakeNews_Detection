@@ -33,20 +33,28 @@ const { getSourceReputation } = require('../agents/sourceReputationAgent');
 const { analyzeClickbait } = require('../agents/clickbaitAgent');
 const { analyzeBias } = require('../agents/biasAgent');
 const { verifyClaims } = require('../agents/claimVerificationAgent');
+const { detectManipulation } = require('../agents/manipulationAgent');
 const checkCredibility = require('../agents/credibilityAgent');
 const { WEIGHTS } = require('../agents/trustAnalysisAgent');
 
 const RPM = 30; // LLM requests per minute budget
 const MIN_GAP_MS = Math.ceil(60000 / RPM);
 
+// Note: the fact-check factor cannot be evaluated on ISOT — those 2016-17
+// claims predate most fact-check databases and the factor needs live lookups.
+// It is measured separately in the live-news study.
 const CONFIGS = {
-  'full':         { source: true,  clickbait: true,  bias: true,  verification: false },
-  'full+verify':  { source: true,  clickbait: true,  bias: true,  verification: true },
-  'no-bias':      { source: true,  clickbait: true,  bias: false, verification: false },
-  'no-clickbait': { source: true,  clickbait: false, bias: true,  verification: false },
-  'no-source':    { source: false, clickbait: true,  bias: true,  verification: false },
-  'content-only': { source: false, clickbait: true,  bias: true,  verification: false },
-  'baseline':     { baseline: true }
+  'full':           { source: true,  clickbait: true,  bias: true,  manipulation: true,  verification: false },
+  'full+verify':    { source: true,  clickbait: true,  bias: true,  manipulation: true,  verification: true },
+  'no-bias':        { source: true,  clickbait: true,  bias: false, manipulation: true,  verification: false },
+  'no-clickbait':   { source: true,  clickbait: false, bias: true,  manipulation: true,  verification: false },
+  'no-manipulation':{ source: true,  clickbait: true,  bias: true,  manipulation: false, verification: false },
+  'no-source':      { source: false, clickbait: true,  bias: true,  manipulation: true,  verification: false },
+  // Source-blind content analysis — the headline configuration, leak-free.
+  'content-only':   { source: false, clickbait: true,  bias: true,  manipulation: true,  verification: false },
+  // The pre-upgrade content pipeline, for comparing against the new factor.
+  'content-v1':     { source: false, clickbait: true,  bias: true,  manipulation: false, verification: false },
+  'baseline':       { baseline: true }
 };
 
 function parseArgs() {
@@ -147,6 +155,7 @@ async function evalOne(item, cfg, hideSource) {
   if (cfg.source) scores.sourceReputation = getSourceReputation(source, null).score;
   if (cfg.clickbait) { scores.clickbait = requireOk(await analyzeClickbait(title), 'clickbait').score; await sleep(MIN_GAP_MS); }
   if (cfg.bias) { scores.bias = requireOk(await analyzeBias(title, text), 'bias').score; await sleep(MIN_GAP_MS); }
+  if (cfg.manipulation) { scores.manipulation = requireOk(await detectManipulation(title, text), 'manipulation').score; await sleep(MIN_GAP_MS); }
   if (cfg.verification) {
     const v = await verifyClaims(title, text, source);
     // Match production behavior: only count verification when it found evidence.
@@ -158,7 +167,9 @@ async function evalOne(item, cfg, hideSource) {
     sourceReputation: 'sourceReputation' in scores,
     clickbait: 'clickbait' in scores,
     bias: 'bias' in scores,
-    verification: 'verification' in scores
+    manipulation: 'manipulation' in scores,
+    verification: 'verification' in scores,
+    factCheck: false // not evaluable on a historical dataset
   };
   return { score: aggregate(scores, enabled), factors: scores };
 }

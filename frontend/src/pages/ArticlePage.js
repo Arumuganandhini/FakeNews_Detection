@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import FeedbackModal from '../components/FeedbackModal';
@@ -10,6 +10,62 @@ const BASE_URL = process.env.REACT_APP_API_URL ||
     ? 'https://news-curator-deployed.onrender.com'
     : 'http://localhost:5000');
 
+
+/**
+ * Run a streamed trust analysis, reporting each check as the server finishes it.
+ *
+ * The endpoint answers with newline-delimited JSON rather than Server-Sent
+ * Events, because the article body must be POSTed and EventSource is GET-only.
+ * If streaming is unavailable for any reason the caller falls back to the plain
+ * endpoint, so an older browser or a proxy that buffers still works.
+ *
+ * @param {Object} body     - the analysis request
+ * @param {Object} headers  - auth headers
+ * @param {Function} onStep - called with {id, name, ms} per completed check
+ * @returns {Promise<Object>} the finished report
+ */
+const streamTrustAnalysis = async (body, headers, onStep) => {
+  const response = await fetch(`${BASE_URL}/api/ai/trust-analysis/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok || !response.body) {
+    // No stream available — fall back to the ordinary endpoint.
+    const plain = await axios.post(`${BASE_URL}/api/ai/trust-analysis`, body, { headers });
+    return plain.data;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let report = null;
+
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let newline;
+    while ((newline = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line) continue;
+
+      let event;
+      try { event = JSON.parse(line); } catch (_) { continue; }
+
+      if (event.type === 'progress') onStep(event);
+      else if (event.type === 'report') report = event.report;
+      else if (event.type === 'error') throw new Error(event.error);
+    }
+  }
+
+  if (!report) throw new Error('The analysis ended without a report.');
+  return report;
+};
+
 const ArticlePage = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -19,18 +75,27 @@ const ArticlePage = () => {
 
   const [summary, setSummary] = useState('');
   const [detailedSummary, setDetailedSummary] = useState('');
-  const [feedback, setFeedback] = useState('');
+  const [summarySourceText, setSummarySourceText] = useState(null);
+  const [detailedSourceText, setDetailedSourceText] = useState(null);
   const [credibility, setCredibility] = useState(null);
+  // The six checks, filled in as the server reports each one finishing. The
+  // reader watches the report being built instead of waiting on a spinner.
+  const [completedChecks, setCompletedChecks] = useState([]);
   const [articleFeedbacks, setArticleFeedbacks] = useState([]);
   const [loadingStates, setLoadingStates] = useState({
     summary: true,
     detailedSummary: false,
-    feedback: false,
-    credibility: false,
+    credibility: true,
     articleFeedbacks: true
   });
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState('');
+
+  // Which article the page is currently showing. Replies for anything else are
+  // discarded — see the guard in analyze().
+  const latestRequest = useRef(article?.url);
+  useEffect(() => { latestRequest.current = article?.url; }, [article]);
 
   // Define trackActivity function using useCallback to avoid recreation on each render
   const trackActivity = useCallback(async (activityType, duration = 0) => {
@@ -70,15 +135,13 @@ const ArticlePage = () => {
       switch (type) {
         case 'summary':
           endpoint = '/api/ai/summarize';
-          body = { article: content };
+          // The URL lets the server reuse this article's existing summary, so
+          // the same article always reads the same way.
+          body = { article: content, url: article.url, title: article.title };
           break;
         case 'detailedSummary':
           endpoint = '/api/ai/detailed-summary';
-          body = { article: content };
-          break;
-        case 'feedback':
-          endpoint = '/api/ai/feedback';
-          body = { article: content, userFeedback: 'None' };
+          body = { article: content, url: article.url, title: article.title };
           break;
         case 'credibility':
           endpoint = '/api/ai/trust-analysis';
@@ -100,17 +163,35 @@ const ArticlePage = () => {
       // Add authorization header if token exists
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
+      // The trust analysis is streamed so each check can be shown as it lands.
+      // Everything else is a single request/response.
+      if (type === 'credibility') {
+        setCompletedChecks([]);
+        const finished = await streamTrustAnalysis(body, headers, (step) => {
+          if (latestRequest.current !== article.url) return;
+          setCompletedChecks(prev =>
+            prev.some(c => c.id === step.id) ? prev : [...prev, step]);
+        });
+        if (latestRequest.current !== article.url) return;
+        setCredibility(finished);
+        return;
+      }
+
       const response = await axios.post(`${BASE_URL}${endpoint}`, body, { headers });
+
+      // These calls take seconds. If the reader has moved to another article in
+      // the meantime, a late reply belongs to the previous one — dropping it
+      // stops one article's summary appearing under another's headline.
+      if (latestRequest.current !== article.url) return;
 
       switch (type) {
         case 'summary':
           setSummary(response.data.summary);
+          setSummarySourceText(response.data.sourceText || null);
           break;
         case 'detailedSummary':
           setDetailedSummary(response.data.summary);
-          break;
-        case 'feedback':
-          setFeedback(response.data.suggestion);
+          setDetailedSourceText(response.data.sourceText || null);
           break;
         case 'credibility':
           setCredibility(response.data);
@@ -144,10 +225,12 @@ const ArticlePage = () => {
     };
   }, [startTime, trackActivity]);
 
-  // Automatically start summarization when page loads
+  // Summary and the trust check both start on their own — a reader should
+  // never have to ask the paper whether a story can be trusted.
   useEffect(() => {
     if (article) {
       analyze('summary');
+      analyze('credibility');
     }
   }, [article, analyze]);
 
@@ -185,22 +268,21 @@ const ArticlePage = () => {
     }
   }, [article, isAuthenticated]);
 
-  useEffect(() => {
-    const fetchArticleFeedbacks = async () => {
-      if (!article) return;
-
-      try {
-        const response = await axios.get(`${BASE_URL}/api/article-feedback/all/${encodeURIComponent(article.url)}`);
-        setArticleFeedbacks(response.data.data || []);
-      } catch (error) {
-        console.error('Error fetching article feedbacks:', error);
-      } finally {
-        setLoadingStates(prev => ({ ...prev, articleFeedbacks: false }));
-      }
-    };
-
-    fetchArticleFeedbacks();
+  const fetchArticleFeedbacks = useCallback(async () => {
+    if (!article) return;
+    try {
+      const response = await axios.get(`${BASE_URL}/api/article-feedback/all/${encodeURIComponent(article.url)}`);
+      setArticleFeedbacks(response.data.data || []);
+    } catch (error) {
+      console.error('Error fetching article feedbacks:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, articleFeedbacks: false }));
+    }
   }, [article]);
+
+  useEffect(() => {
+    fetchArticleFeedbacks();
+  }, [fetchArticleFeedbacks]);
 
   const handleShowFullFeedback = () => {
     setShowModal(true);
@@ -231,15 +313,17 @@ const ArticlePage = () => {
         }
       );
 
-      // Close the modal
       setShowModal(false);
 
-      // Show success message
-      alert('Thank you for your feedback!');
+      // Confirm inline and refresh the list, so the reader sees their own view
+      // appear rather than being interrupted by a browser dialog.
+      setNotice('Thanks — your view has been added below.');
+      setTimeout(() => setNotice(''), 5000);
+      fetchArticleFeedbacks();
 
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      setError('Failed to submit feedback. Please try again.');
+      setError('We could not save your view. Please try again.');
     }
   };
 
@@ -247,18 +331,38 @@ const ArticlePage = () => {
     analyze('detailedSummary');
   };
 
-  const handleQuizClick = () => {
-    if (!detailedSummary) {
-      alert('Please generate a detailed summary first before taking the quiz.');
-      return;
+  // The quiz is built from the long summary. Rather than making the reader
+  // discover that, fetch it for them if it is not ready yet.
+  const handleQuizClick = async () => {
+    let summaryForQuiz = detailedSummary;
+
+    if (!summaryForQuiz) {
+      setLoadingStates(prev => ({ ...prev, detailedSummary: true }));
+      try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const content = article.content || article.description || article.title;
+        const response = await axios.post(
+          `${BASE_URL}/api/ai/detailed-summary`,
+          // Same cache key as the button above, so the quiz is built from the
+          // very summary the reader was shown.
+          { article: content, url: article.url, title: article.title },
+          { headers }
+        );
+        summaryForQuiz = response.data.summary;
+        setDetailedSummary(summaryForQuiz);
+        setDetailedSourceText(response.data.sourceText || null);
+      } catch (err) {
+        console.error('Could not prepare the quiz:', err);
+        setError('We could not prepare the quiz just now. Please try again.');
+        return;
+      } finally {
+        setLoadingStates(prev => ({ ...prev, detailedSummary: false }));
+      }
     }
 
-    // Navigate to the quiz page with the detailed summary and article title
     navigate('/quiz', {
-      state: {
-        detailedSummary,
-        articleTitle: article.title
-      }
+      state: { detailedSummary: summaryForQuiz, articleTitle: article.title, article }
     });
   };
 
@@ -309,6 +413,21 @@ const ArticlePage = () => {
 
   return (
     <div className="article-page">
+      {/* Anything that fails is said out loud rather than swallowed. */}
+      {error && (
+        <div className="page-notice" role="alert">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} aria-label="Dismiss message">×</button>
+        </div>
+      )}
+
+      {notice && (
+        <div className="page-notice page-notice-good" role="status">
+          <span>{notice}</span>
+          <button onClick={() => setNotice('')} aria-label="Dismiss message">×</button>
+        </div>
+      )}
+
       <div className="article-header">
         <h1 className="article-title">{article.title}</h1>
         <div className="article-meta">
@@ -332,9 +451,14 @@ const ArticlePage = () => {
             }}
           />
         )}
-        <div className="article-content">
-          <p>{article.description}</p>
-        </div>
+        {/* Some feed entries carry no description at all, or a stray fragment
+            like a single full stop. Rendering that leaves a lone mark floating
+            under the photo, so the block is skipped unless there is real text. */}
+        {(article.description || '').replace(/[^a-zA-Z0-9]/g, '').length > 3 && (
+          <div className="article-content">
+            <p>{article.description}</p>
+          </div>
+        )}
         <div className="article-actions">
           <a
             href={article.url}
@@ -344,118 +468,111 @@ const ArticlePage = () => {
           >
             Read Original Article
           </a>
+          <button
+            className="feedback-button"
+            onClick={() => navigate('/compare', { state: { article } })}
+          >
+            Compare Coverage
+          </button>
         </div>
       </div>
 
       <div className="article-bottom-section">
-        <div className="summary-section">
-          <h2>Summary</h2>
-          {loadingStates.summary ? (
-            <div className="loading-state">
-              <div className="spinner"></div>
-              <p>Generating summary...</p>
-            </div>
-          ) : (
-            <>
-              <p>{summary}</p>
-              <div className="summary-actions">
-                <button
-                  className="action-button"
-                  onClick={handleDetailedSummary}
-                  disabled={loadingStates.detailedSummary}
-                >
-                  {loadingStates.detailedSummary ? 'Generating...' : 'Detailed Summary'}
-                </button>
-                <button
-                  className="action-button"
-                  onClick={handleQuizClick}
-                  disabled={!detailedSummary}
-                >
-                  Wanna validate yourself? Take Quiz
-                </button>
+        {/* The summary and the reader feedback share the left column. They
+            were previously separate grid items, which tied their heights to
+            the report beside them and left a large gap under the summary. */}
+        <div className="article-left-column">
+          <div className="summary-section">
+            <h2>Summary</h2>
+            {loadingStates.summary ? (
+              <div className="loading-state">
+                <div className="spinner"></div>
+                <p>Generating summary...</p>
               </div>
-              {detailedSummary && (
-                <div className="detailed-summary">
-                  <h3>Detailed Summary</h3>
-                  <p>{detailedSummary}</p>
+            ) : (
+              <>
+                <p>{summary}</p>
+                {summarySourceText?.coverage === 'publisher-excerpt' && (
+                  <p className="summary-source-note">
+                    Based on the publisher&apos;s short excerpt. Open the original article for fuller context.
+                  </p>
+                )}
+                <div className="summary-actions">
+                  <button
+                    className="action-button"
+                    onClick={handleDetailedSummary}
+                    disabled={loadingStates.detailedSummary}
+                  >
+                    {loadingStates.detailedSummary ? 'Setting type…' : 'Read a longer summary'}
+                  </button>
+                  <button
+                    className="action-button"
+                    onClick={handleQuizClick}
+                    disabled={loadingStates.detailedSummary}
+                  >
+                    {loadingStates.detailedSummary ? 'Preparing…' : 'Test yourself on this story'}
+                  </button>
                 </div>
-              )}
-            </>
-          )}
+                {detailedSummary && (
+                  <div className="detailed-summary">
+                    <h3>Detailed Summary</h3>
+                    <p>{detailedSummary}</p>
+                    {detailedSourceText?.coverage === 'publisher-excerpt' && (
+                      <p className="summary-source-note">
+                        This story was supplied as a short publisher excerpt, so there is no additional verified detail to expand.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="article-feedbacks-section">
+            <div className="feedbacks-header">
+              <h3 className="feedback-title">What readers think</h3>
+              <button className="feedback-button" onClick={handleShowFullFeedback}>
+                Share your view
+              </button>
+            </div>
+            {renderArticleFeedbacks()}
+          </div>
         </div>
 
         <div className="right-cards">
           <div className="credibility-card">
-            <h3 className="credibility-title">Trust Analysis</h3>
+            <h3 className="credibility-title">Can you trust this article?</h3>
             {loadingStates.credibility ? (
               <div className="loading-state">
                 <div className="spinner"></div>
-                <p className="loading-text">Running trust analysis...</p>
-                <p className="loading-subtext">Checking source, headline, bias &amp; cross-source evidence</p>
-              </div>
-            ) : error ? (
-              <div className="error-message">
-                <p>{error}</p>
-                <button
-                  className="feedback-button"
-                  onClick={() => analyze('credibility')}
-                >
-                  Retry
-                </button>
+                <p className="loading-text">
+                  {completedChecks.length
+                    ? `Checked ${completedChecks.length} of 6…`
+                    : 'Starting the checks…'}
+                </p>
+                <ul className="check-progress">
+                  {completedChecks.map(check => (
+                    <li key={check.id} className="check-done">{check.name}</li>
+                  ))}
+                </ul>
+                <p className="loading-subtext">
+                  Six independent checks are combined into one explainable report.
+                </p>
               </div>
             ) : credibility ? (
               <TrustReport report={credibility} />
             ) : (
-              <button
-                className="feedback-button"
-                onClick={() => analyze('credibility')}
-              >
-                Analyze Trustworthiness
-              </button>
-            )}
-          </div>
-
-          <div className="feedback-card">
-            <h3 className="feedback-title">AI Feedback</h3>
-            {loadingStates.feedback ? (
-              <div className="loading-state">
-                <div className="spinner"></div>
-                <p className="loading-text">Generating feedback...</p>
-              </div>
-            ) : error ? (
               <div className="error-message">
-                <p>{error}</p>
+                <p>We couldn&apos;t check this article just now.</p>
                 <button
                   className="feedback-button"
-                  onClick={() => analyze('feedback')}
+                  onClick={() => analyze('credibility')}
                 >
-                  Retry
+                  Try again
                 </button>
               </div>
-            ) : feedback ? (
-              <div className="feedback-content">
-                <p>{feedback}</p>
-                <button
-                  className="feedback-button"
-                  onClick={handleShowFullFeedback}
-                >
-                  Provide Your Feedback
-                </button>
-              </div>
-            ) : (
-              <button
-                className="feedback-button"
-                onClick={() => analyze('feedback')}
-              >
-                Get AI Feedback
-              </button>
             )}
           </div>
-        </div>
-
-        <div className="article-feedbacks-section">
-          <h3 className="feedback-title">User Feedbacks</h3>
-          {renderArticleFeedbacks()}
         </div>
       </div>
 

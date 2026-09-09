@@ -1,9 +1,10 @@
-// backend/agents/biasAgent.js
+﻿// backend/agents/biasAgent.js
 // Factor 3: Bias and emotional-language detection — structured LLM call that
 // flags specific sentences so the frontend can highlight them.
 const { callNimApiJson } = require('../utils/nvidiaNimApi');
+const { biasByRules } = require('./heuristics');
 
-const BIAS_TYPES = ['political bias', 'emotional manipulation', 'loaded language', 'one-sided reporting', 'opinion as fact', 'sensationalism'];
+const BIAS_TYPES =['political bias', 'emotional manipulation', 'loaded language', 'one-sided reporting', 'opinion as fact', 'sensationalism'];
 
 /**
  * Analyze article text for bias and emotionally manipulative language.
@@ -59,18 +60,12 @@ Respond with ONLY a JSON object, no other text:
       biasLevel,
       politicalLean: String(result.political_lean || 'none-detected'),
       flaggedSentences: flagged,
-      explanation: String(result.explanation || 'No explanation provided.')
+      explanation: String(result.explanation || 'No explanation provided.'),
+      method: 'model'
     };
   } catch (err) {
-    console.error('Bias analysis failed:', err.message);
-    return {
-      score: 5,
-      biasLevel: 'unknown',
-      politicalLean: 'none-detected',
-      flaggedSentences: [],
-      explanation: 'Bias analysis unavailable — treated as neutral.',
-      failed: true
-    };
+    console.error('Bias analysis failed, falling back to rules:', err.message);
+    return { ...biasByRules(title, content), degraded: true };
   }
 };
 

@@ -10,25 +10,30 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
+  padding-bottom: 1.1rem;
+  /* The verdict is the masthead of this panel, so it sits above a press rule
+     rather than floating into the notes below it. */
+  border-bottom: 3px double var(--ink);
 }
 
 .trust-verdict {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 1.15rem;
+  font-family: var(--headline-font);
+  font-size: 1.35rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
 }
 
 /* Factor rows */
 .trust-factors {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid #e8e5d8;
+  border-top: 1px solid var(--rule);
 }
 
 .trust-factor {
-  border-bottom: 1px solid #e8e5d8;
+  border-bottom: 1px solid var(--rule);
 }
 
 .factor-row {
@@ -58,18 +63,18 @@
 .factor-name {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #2b2b26;
+  color: var(--ink-body);
 }
 
 .factor-weight {
   font-size: 0.7rem;
-  color: #8a8574;
+  color: var(--ink-muted);
 }
 
 .factor-bar-track {
   flex: 1;
   height: 8px;
-  background: #f0ede2;
+  background: var(--paper-sunken);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -83,14 +88,14 @@
 .factor-score {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #2b2b26;
+  color: var(--ink-body);
   min-width: 26px;
   text-align: right;
 }
 
 .factor-chevron {
   font-size: 0.7rem;
-  color: #8a8574;
+  color: var(--ink-muted);
   transition: transform 0.2s ease;
 }
 
@@ -102,13 +107,13 @@
 .factor-expanded {
   padding: 0.25rem 0.5rem 0.9rem;
   font-size: 0.82rem;
-  color: #44403a;
+  color: var(--ink-body);
   line-height: 1.5;
 }
 
 .factor-explanation {
   font-style: italic;
-  color: #5c574a;
+  color: var(--ink-soft);
   margin-bottom: 0.5rem;
 }
 
@@ -131,7 +136,7 @@
   background: rgba(198, 134, 43, 0.08);
   border-left: 3px solid #c9862b;
   font-style: italic;
-  color: #3d382e;
+  color: var(--ink-body);
 }
 
 .flag-type {
@@ -140,18 +145,18 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #a3641f;
+  color: var(--trust-caution);
 }
 
 .flag-reason {
   font-size: 0.78rem;
-  color: #6b6555;
+  color: var(--ink-soft);
 }
 
 /* Claims (cross-source verification) */
 .claim-item {
   padding: 0.55rem 0;
-  border-top: 1px dashed #e8e5d8;
+  border-top: 1px dashed var(--rule);
 }
 
 .claim-item:first-child {
@@ -170,28 +175,28 @@
 
 .claim-badge.supported {
   background: rgba(74, 124, 89, 0.12);
-  color: #3c6a4a;
+  color: var(--trust-high);
 }
 
 .claim-badge.contradicted {
   background: rgba(166, 60, 60, 0.12);
-  color: #8f3232;
+  color: var(--press-red);
 }
 
 .claim-badge.unverified {
   background: rgba(138, 133, 116, 0.15);
-  color: #6b6555;
+  color: var(--ink-soft);
 }
 
 .claim-text {
   margin: 0.35rem 0 0.2rem;
   font-weight: 600;
-  color: #2b2b26;
+  color: var(--ink-body);
 }
 
 .claim-explanation {
   margin: 0 0 0.3rem;
-  color: #5c574a;
+  color: var(--ink-soft);
 }
 
 .evidence-list {
@@ -200,26 +205,311 @@
 }
 
 .evidence-list a {
-  color: #4a6b8a;
+  color: var(--accent);
   text-decoration: none;
-  border-bottom: 1px dotted #4a6b8a;
+  border-bottom: 1px dotted var(--accent);
 }
 
 .evidence-list a:hover {
-  color: #2e4a66;
+  color: var(--accent);
 }
 
 .loading-subtext {
   font-size: 0.75rem;
-  color: #8a8574;
+  color: var(--ink-muted);
   font-style: italic;
   margin-top: 0.25rem;
 }
 
 .trust-footnote {
   font-size: 0.72rem;
-  color: #8a8574;
+  color: var(--ink-muted);
   font-style: italic;
   text-align: center;
   margin: 0;
+}
+
+/* ==========================================================================
+   The editor's note — plain-language verdict shown before the working
+   ========================================================================= */
+
+.trust-plain-summary {
+  padding: 0 0.25rem;
+  margin: 0.5rem 0 0;
+  text-align: center;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+/* Shown when the language model was unreachable and the pattern check stood in.
+   Set as an editor's caveat — visible, but not an error. */
+.trust-degraded-note {
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  font-style: italic;
+  color: var(--ink-soft);
+  background: var(--trust-caution-soft);
+  border-left: 3px solid var(--trust-caution);
+}
+
+.trust-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin: 1.1rem 0 0.25rem;
+}
+
+/* Each group is a small boxed sidebar, tinted by what it means, so a reader
+   can tell concerns from reassurances at a glance instead of reading both. */
+.note-group {
+  padding: 0.8rem 0.95rem;
+  border-left: 3px solid var(--rule-strong);
+  background: var(--paper-aged);
+}
+
+.note-group.concern {
+  border-left-color: var(--trust-caution);
+  background: var(--trust-caution-soft);
+}
+
+.note-group.good {
+  border-left-color: var(--trust-high);
+  background: var(--trust-high-soft);
+}
+
+.note-heading {
+  margin: 0 0 0.45rem;
+  font-family: var(--label-font);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.note-heading.concern { color: var(--trust-caution); }
+.note-heading.good { color: var(--trust-high); }
+
+.note-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ink-body);
+}
+
+.note-group li {
+  position: relative;
+  padding-left: 1.1rem;
+  margin-bottom: 0.4rem;
+}
+
+.note-group li:last-child { margin-bottom: 0; }
+
+/* A printed mark rather than a browser bullet: a caution rule for concerns,
+   a check for the points in the article's favour. */
+.note-group.concern li::before {
+  content: '!';
+  position: absolute;
+  left: 0;
+  font-family: var(--label-font);
+  font-weight: 700;
+  color: var(--trust-caution);
+}
+
+.note-group.good li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  font-weight: 700;
+  color: var(--trust-high);
+}
+
+/* The working is opt-in, so the panel stays calm by default */
+.working-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.55rem;
+  font-family: var(--label-font);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.working-toggle:hover {
+  background: var(--paper-sunken);
+  border-color: var(--rule-heavy);
+}
+
+/* Reader-feedback header sits title and action on one line */
+.feedbacks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.feedbacks-header .feedback-title { margin: 0; }
+
+/* ==========================================================================
+   Persuasion techniques — named, quoted in the article's own words
+   ========================================================================= */
+
+.technique-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.6rem;
+}
+
+.technique {
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  background: var(--paper-card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--press-red-bright);
+}
+
+.technique-name {
+  font-family: var(--label-font);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--press-red-bright);
+  margin-bottom: 0.35rem;
+}
+
+.technique blockquote {
+  margin: 0 0 0.4rem;
+  font-family: var(--headline-font);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.technique-effect {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-body);
+}
+
+.technique-def {
+  margin: 0.25rem 0 0;
+  font-size: 0.76rem;
+  font-style: italic;
+  color: var(--ink-muted);
+}
+
+/* ==========================================================================
+   Transparency checklist — what a reader could go and verify
+   ========================================================================= */
+
+.check-list {
+  list-style: none;
+  margin: 0.6rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.check-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  cursor: help;
+}
+
+.check-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.check-pass { color: var(--trust-high); }
+.check-fail { color: var(--ink-muted); }
+.check-fail .check-mark { color: var(--trust-low); }
+
+.named-sources {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--ink-body);
+}
+
+.vague-heading {
+  margin: 0.75rem 0 0.3rem;
+  font-family: var(--label-font);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--trust-caution);
+}
+
+.vague-list {
+  margin: 0;
+  padding-left: 1.05rem;
+  font-size: 0.86rem;
+  font-style: italic;
+  color: var(--ink-body);
+}
+
+.vague-list li { margin-bottom: 0.2rem; }
+
+/* ==========================================================================
+   Factors that stood down — no evidence, so they contributed nothing.
+   Muted so they never read as a middling score that pulled the result down.
+   ========================================================================= */
+
+.factor-stood-down .factor-name { color: var(--ink-muted); }
+
+.factor-stood-down .factor-weight {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.factor-bar-empty {
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  /* Hatched, not filled — reads as "no reading taken" */
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--rule) 0px,
+    var(--rule) 3px,
+    transparent 3px,
+    transparent 7px
+  );
+}
+
+.factor-score-none {
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+
+.stood-down-note {
+  color: var(--ink-soft);
+  font-style: italic;
 }

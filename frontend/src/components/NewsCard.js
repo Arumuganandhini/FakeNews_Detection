@@ -3,7 +3,51 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import '../styles/NewsCard.css';
 
-const NewsCard = ({ article }) => {
+/**
+ * Trust stamp — the at-a-glance verdict on each clipping.
+ *  - "analyzed"    this article already has a full report (served from cache)
+ *  - "source-only" we only know the publisher's record so far
+ * Styled like an editor's rubber stamp rather than a web badge.
+ */
+const TrustStamp = ({ badge }) => {
+  if (!badge) return <span className="trust-stamp trust-stamp-pending" aria-hidden="true" />;
+
+  const level = (score) => {
+    if (score >= 7.5) return 'high';
+    if (score >= 5.5) return 'good';
+    if (score >= 4) return 'caution';
+    return 'low';
+  };
+
+  if (badge.kind === 'analyzed') {
+    return (
+      <span
+        className={`trust-stamp stamp-${level(badge.score)}`}
+        title={`We checked this article: ${badge.verdict}`}
+      >
+        {badge.verdict}
+        {badge.concernCount > 0 && (
+          <em className="stamp-note">{badge.concernCount} to check</em>
+        )}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={`trust-stamp ${badge.sourceMatched ? `stamp-${level(badge.score)}` : 'stamp-unknown'}`}
+      title={
+        badge.sourceMatched
+          ? `${badge.sourceName} is rated ${badge.score}/10 for accuracy. Open the article for the full check.`
+          : 'We have no reliability record for this outlet. Open the article for the full check.'
+      }
+    >
+      {badge.label}
+    </span>
+  );
+};
+
+const NewsCard = ({ article, trustBadge }) => {
   const navigate = useNavigate();
   const [imageError, setImageError] = useState(false);
 
@@ -84,6 +128,8 @@ const NewsCard = ({ article }) => {
             
             <p className="news-description">{article.description}</p>
             
+            <TrustStamp badge={trustBadge} />
+
             <div className="news-meta">
               <span className="news-source">
                 {article.source?.name || 'Unknown Press'}

@@ -26,8 +26,8 @@ const SignupPage = ({ setUser }) => {
     setAnimationStage(1);
 
     // Create a sequence of animations with proper timing for newspaper unfolding effect
-    const timer1 = setTimeout(() => setIsUnfolded(true), 800);
-    const timer2 = setTimeout(() => setAnimationStage(2), 1800);
+    const timer1 = setTimeout(() => setIsUnfolded(true), 220);
+    const timer2 = setTimeout(() => setAnimationStage(2), 520);
 
     return () => {
       clearTimeout(timer1);
@@ -152,15 +152,6 @@ const SignupPage = ({ setUser }) => {
           </div>
         </div>
 
-        {/* Newspaper elements - positioned strategically to avoid overflow */}
-        <div className="floating-element newspaper">📰</div>
-        <div className="floating-element pen">🖋️</div>
-        <div className="floating-element calendar">📅</div>
-        <div className="floating-element bell">🔔</div>
-        <div className="floating-element coffee">☕</div>
-        <div className="floating-element glasses">👓</div>
-        <div className="floating-element ink">🖨️</div>
-        <div className="floating-element book">📚</div>
       </div>
 
       <div className={`signup-form ${isUnfolded ? 'unfolded' : ''}`}>

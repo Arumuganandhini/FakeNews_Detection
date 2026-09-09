@@ -1,9 +1,9 @@
-// backend/agents/claimVerificationAgent.js
+﻿// backend/agents/claimVerificationAgent.js
 // Factor 4: Cross-source verification — extract the article's key checkable
 // claims, search for coverage from OTHER outlets, and have the LLM judge
 // whether that independent coverage supports or contradicts each claim.
 const { callNimApiJson } = require('../utils/nvidiaNimApi');
-const { searchNewsCoverage } = require('../utils/newsFetcher');
+const { searchCoverageBroadening } = require('../utils/newsFetcher');
 const { getSourceReputation } = require('./sourceReputationAgent');
 
 /**
@@ -20,13 +20,13 @@ Respond with ONLY a JSON object, no other text:
   "claims": [
     {
       "claim": "<the factual claim in one sentence>",
-      "search_keywords": "<3-6 keywords another news site would use for this story, no quotes or operators>"
+      "search_keywords": "<exactly 3 or 4 of the most distinctive words - names, places or events - most important first, no quotes or operators>"
     }
   ]
 }
 Return at most ${maxClaims} claims. If the article contains no checkable claims, return an empty array.`;
 
-  const result = await callNimApiJson(prompt, { maxTokens: 400 });
+  const result = await callNimApiJson(prompt, { maxTokens: 600 });
   const claims = Array.isArray(result.claims) ? result.claims : [];
   return claims
     .filter(c => c && c.claim && c.search_keywords)
@@ -58,7 +58,7 @@ Respond with ONLY a JSON object, no other text:
 }
 Use "supported" only if at least one item clearly reports the same fact. Use "contradicted" if any item reports conflicting facts. Otherwise "unverified".`;
 
-  const result = await callNimApiJson(prompt, { maxTokens: 300 });
+  const result = await callNimApiJson(prompt, { maxTokens: 500 });
   const pick = (indices) =>
     (Array.isArray(indices) ? indices : [])
       .map(n => coverage[Number(n) - 1])
@@ -83,9 +83,11 @@ Use "supported" only if at least one item clearly reports the same fact. Use "co
  *          score 0-10: supported claims from reliable outlets push it up,
  *          contradicted claims push it down, no coverage stays neutral.
  */
-const verifyClaims = async (title, content, sourceName) => {
+const verifyClaims = async (title, content, sourceName, preExtractedClaims = null) => {
   try {
-    const claims = await extractClaims(title, content);
+    // The orchestrator extracts claims once and shares them with the
+    // fact-check factor, so we accept them rather than extracting again.
+    const claims = preExtractedClaims || await extractClaims(title, content);
     if (claims.length === 0) {
       return {
         score: 5,
@@ -95,22 +97,25 @@ const verifyClaims = async (title, content, sourceName) => {
       };
     }
 
-    const results = [];
-    for (const { claim, keywords } of claims) {
-      const coverage = await searchNewsCoverage(keywords, sourceName, 8);
+    // Claims are independent of one another, so they are checked together
+    // rather than one after the next. This loop used to run strictly in series
+    // — search, wait, judge, wait, then the same again for the next claim —
+    // which made verification the slowest factor in the pipeline at ~28s.
+    // The model gateway still caps how many calls are actually in flight.
+    const results = await Promise.all(claims.map(async ({ claim, keywords }) => {
+      const { articles: coverage } = await searchCoverageBroadening(keywords, sourceName, 8, 2);
       if (coverage.length === 0) {
-        results.push({
+        return {
           claim,
           verdict: 'no-coverage',
           supportingEvidence: [],
           contradictingEvidence: [],
           explanation: 'No coverage of this claim was found from other outlets.'
-        });
-        continue;
+        };
       }
       const judgement = await judgeClaim(claim, coverage);
-      results.push({ claim, ...judgement });
-    }
+      return { claim, ...judgement };
+    }));
 
     // Aggregate claim verdicts into a 0-10 factor score.
     // Baseline 5 (unknown). Each supported claim adds, each contradicted subtracts,

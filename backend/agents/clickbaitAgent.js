@@ -1,7 +1,8 @@
-// backend/agents/clickbaitAgent.js
+﻿// backend/agents/clickbaitAgent.js
 // Factor 2: Clickbait headline detection — one structured LLM call that
 // scores the headline and names the specific clickbait signals found.
 const { callNimApiJson } = require('../utils/nvidiaNimApi');
+const { clickbaitByRules } = require('./heuristics');
 
 /**
  * Analyze a headline for clickbait characteristics.
@@ -31,7 +32,7 @@ Respond with ONLY a JSON object, no other text:
 }`;
 
   try {
-    const result = await callNimApiJson(prompt, { maxTokens: 300 });
+    const result = await callNimApiJson(prompt, { maxTokens: 450 });
     let clickbaitScore = Number(result.clickbait_score);
     if (!Number.isFinite(clickbaitScore)) clickbaitScore = 0;
     clickbaitScore = Math.min(10, Math.max(0, clickbaitScore));
@@ -41,17 +42,13 @@ Respond with ONLY a JSON object, no other text:
       score: Math.round((10 - clickbaitScore) * 10) / 10,
       isClickbait: clickbaitScore >= 5,
       signals: Array.isArray(result.signals) ? result.signals.map(String) : [],
-      explanation: String(result.explanation || 'No explanation provided.')
+      explanation: String(result.explanation || 'No explanation provided.'),
+      method: 'model'
     };
   } catch (err) {
-    console.error('Clickbait analysis failed:', err.message);
-    return {
-      score: 5,
-      isClickbait: false,
-      signals: [],
-      explanation: 'Clickbait analysis unavailable — treated as neutral.',
-      failed: true
-    };
+    // Fall back to the pattern check rather than inventing a neutral score.
+    console.error('Clickbait analysis failed, falling back to rules:', err.message);
+    return { ...clickbaitByRules(title), degraded: true };
   }
 };
 

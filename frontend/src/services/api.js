@@ -1,51 +1,44 @@
 import axios from 'axios';
 
+/**
+ * The single HTTP client for the app: base URL, auth header and shared error
+ * handling live here so no page has to repeat them.
+ */
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL ||
+  baseURL:
+    process.env.REACT_APP_API_URL ||
     (window.location.hostname.includes('onrender.com')
       ? 'https://news-curator-deployed.onrender.com/api'
       : 'http://localhost:5000/api'),
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' }
 });
 
-// Add a request interceptor
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-      console.log('Adding auth token to request:', config.url);
-    } else {
-      console.log('No auth token found for request:', config.url);
-    }
-    return config;
-  },
-  (error) => {
-    console.error('Request interceptor error:', error);
-    return Promise.reject(error);
-  }
-);
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-// Add a response interceptor
 api.interceptors.response.use(
-  (response) => {
-    console.log('API response success:', response.config.url);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error('API response error:', error.config?.url, error.response?.status);
-    console.error('Error details:', error.response?.data || error.message);
-
-    if (error.response?.status === 401) {
-      console.log('Unauthorized request, clearing token');
-      // Clear token and redirect to login if unauthorized
+    // An expired session should return the reader to sign-in rather than
+    // leaving them on a page whose actions all silently fail.
+    if (error.response?.status === 401 && localStorage.getItem('token')) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.assign('/login');
+      }
+    }
+    // Errors are surfaced in the UI; log detail only while developing.
+    if (process.env.NODE_ENV === 'development') {
+      console.error(
+        `API ${error.config?.method?.toUpperCase() || ''} ${error.config?.url || ''} →`,
+        error.response?.status || error.message
+      );
     }
     return Promise.reject(error);
   }
 );
 
-export default api; 
+export default api;

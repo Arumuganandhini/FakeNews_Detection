@@ -1,0 +1,363 @@
+/* Compare Coverage — a broadsheet comparison spread.
+   Built on the shared .press-* newsprint layer so it matches the front page. */
+.compare-page {
+  max-width: 1400px;
+  margin: 2rem auto;
+  padding: 2rem;
+  position: relative;
+  background-color: var(--paper-card);
+  border: 1px solid var(--rule-strong);
+  box-shadow: 0 5px 25px rgba(26, 26, 26, 0.15);
+  font-family: var(--body-font);
+  color: var(--ink-body);
+  animation: press-fade-in 0.5s ease-out;
+}
+.compare-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%23c5b793' fill-opacity='0.15' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+.compare-page > * { position: relative; z-index: 1; }
+/* ============================== Masthead ================================= */
+.compare-page .compare-masthead {
+  text-align: center;
+  padding: 1.5rem 0;
+  margin-bottom: 2rem;
+  border-bottom: 3px double var(--ink);
+}
+/* The thin rules that top and tail the masthead */
+.compare-page .masthead-rule {
+  display: block;
+  height: 3px;
+  background: var(--ink);
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  background-clip: content-box;
+  padding: 2px 0;
+}
+.compare-page .compare-title {
+  font-family: var(--headline-font);
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 900;
+  letter-spacing: -1px;
+  text-transform: uppercase;
+  margin: 0.75rem 0 0.35rem;
+  color: var(--ink);
+  text-shadow: 2px 2px 0 rgba(26, 26, 26, 0.1);
+}
+.compare-page .compare-strapline {
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--ink-soft);
+  letter-spacing: 0.5px;
+  margin: 0 0 0.75rem;
+}
+.compare-page .kicker {
+  display: block;
+  font-family: var(--label-font);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-muted);
+  margin-bottom: 0.4rem;
+}
+/* =============================== Search ================================== */
+.compare-page .compare-search {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 660px;
+  margin: 0 auto 2rem;
+  padding: 0.85rem;
+  background: var(--paper-aged);
+  border-top: 1px solid var(--rule-heavy);
+  border-bottom: 1px solid var(--rule-heavy);
+}
+.compare-page .compare-search input {
+  flex: 1;
+  padding: 0.65rem 0.85rem;
+  font-family: var(--body-font);
+  font-size: 0.95rem;
+  color: var(--ink-body);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+}
+.compare-page .compare-search input::placeholder { color: var(--ink-muted); }
+.compare-page .compare-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.compare-page .compare-search button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1.3rem;
+  font-family: var(--label-font);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.compare-page .compare-search button:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }.compare-page .compare-search button:disabled { opacity: 0.45; cursor: not-allowed; }
+/* =============================== States ================================== */
+.compare-page .compare-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 3rem 0;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+.compare-page .compare-notice {
+  max-width: 640px;
+  margin: 2rem auto;
+  padding: 1.25rem;
+  text-align: center;
+  font-style: italic;
+  background: var(--paper-aged);
+  border: 1px dashed var(--rule-heavy);
+  color: var(--ink-soft);
+}
+.compare-page .compare-notice.error {
+  background: var(--trust-low-soft);
+  border-color: var(--press-red);
+  border-style: solid;
+  color: var(--press-red);
+  font-style: normal;
+}
+.compare-page .searched-line {
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  margin-top: 0.3rem;
+  font-style: italic;
+}
+/* ============================== Consensus ================================ */
+.compare-page .consensus-sheet {
+  background: var(--paper-aged);
+  border: 1px solid var(--rule-strong);
+  border-top: 4px double var(--ink);
+  padding: 1.75rem;
+  margin-bottom: 2rem;
+}
+.compare-page .consensus-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.compare-page .consensus-topic {
+  font-family: var(--headline-font);
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 0.25rem;
+  color: var(--ink);
+}
+/* Rubber-stamped verdict on how much the outlets agree */
+.compare-page .agreement-stamp {
+  padding: 0.45rem 0.9rem;
+  font-family: var(--label-font);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+  transform: rotate(-2deg);
+  white-space: nowrap;
+}
+.compare-page .agreement-stamp.high { color: var(--trust-high); }.compare-page .agreement-stamp.mixed { color: var(--trust-caution); }.compare-page .agreement-stamp.low { color: var(--press-red); }
+.compare-page .consensus-summary {
+  margin: 1.25rem 0;
+  font-size: 1.02rem;
+  line-height: 1.75;
+  color: var(--ink-body);
+  /* Drop cap, as a leading paragraph would carry in print */
+  text-align: justify;
+  hyphens: auto;
+}
+.compare-page .consensus-summary::first-letter {
+  float: left;
+  font-family: var(--headline-font);
+  font-size: 3.1rem;
+  line-height: 0.82;
+  font-weight: 700;
+  padding: 0.1rem 0.5rem 0 0;
+  color: var(--ink);
+}
+/* ------------------------------------------------------------- Lean bar - */
+.compare-page .lean-block { margin: 1.5rem 0; }
+.compare-page .lean-bar {
+  display: flex;
+  height: 26px;
+  border: 1px solid var(--ink);
+}
+.compare-page .lean-seg {
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: var(--label-font);
+}
+.compare-page .lean-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+.compare-page .lean-key span { display: flex; align-items: center; gap: 0.35rem; }.compare-page .lean-key i { width: 10px; height: 10px; display: inline-block; border: 1px solid rgba(0,0,0,0.15); }
+/* --------------------------------------------------------- Two columns -- */
+.compare-page .consensus-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 2rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule-heavy);
+}
+.compare-page .agreed-list, .compare-page .differ-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--ink-body);
+}
+.compare-page .agreed-list li, .compare-page .differ-list li { margin-bottom: 0.5rem; }.compare-page .agreed-list li::marker { color: var(--trust-high); }.compare-page .differ-list li::marker { color: var(--trust-caution); }.compare-page .differ-list em { color: var(--ink-muted); }
+/* =============================== Outlets ================================= */
+.compare-page .outlet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+.compare-page .outlet-column {
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  padding: 1.25rem;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.compare-page .outlet-column:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(26, 26, 26, 0.14);
+}
+.compare-page .outlet-column.is-original {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.compare-page .outlet-masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--ink);
+}
+.compare-page .outlet-name {
+  font-family: var(--headline-font);
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.compare-page .outlet-flag {
+  font-family: var(--label-font);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: var(--accent);
+  color: var(--paper);
+  padding: 0.15rem 0.4rem;
+}
+.compare-page .outlet-scoreline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px dotted var(--rule-heavy);
+}
+.compare-page .outlet-score {
+  font-family: var(--headline-font);
+  font-size: 2.2rem;
+  font-weight: 900;
+  line-height: 1;
+}
+.compare-page .outlet-score-label {
+  font-family: var(--label-font);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  line-height: 1.2;
+}
+.compare-page .outlet-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.75rem 0; }
+.compare-page .lean-tag, .compare-page .plain-tag, .compare-page .warn-tag {
+  font-family: var(--label-font);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  padding: 0.18rem 0.5rem;
+  white-space: nowrap;
+}
+.compare-page .lean-tag { color: #fff; }.compare-page .plain-tag { background: var(--paper-sunken); color: var(--ink-soft); border: 1px solid var(--rule); }.compare-page .warn-tag { background: var(--trust-caution-soft); color: var(--trust-caution); border: 1px solid var(--trust-caution); }
+.compare-page .outlet-headline {
+  font-family: var(--headline-font);
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 0.5rem;
+  color: var(--ink);
+}
+.compare-page .outlet-standfirst {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  margin: 0 0 0.75rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.compare-page .outlet-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+  font-family: var(--label-font);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+.compare-page .outlet-read:hover { text-decoration: underline; }
+.compare-page .compare-footnote {
+  margin-top: 2.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule-heavy);
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--ink-muted);
+  text-align: center;
+}
+@media (max-width: 768px) {.compare-page { margin: 1rem 0.75rem; padding: 1.25rem; }.compare-page .compare-search { flex-direction: column; }.compare-page .compare-search button { width: 100%; justify-content: center; }.compare-page .outlet-grid { grid-template-columns: 1fr; }.compare-page .consensus-sheet { padding: 1.25rem; }.compare-page .consensus-summary::first-letter { font-size: 2.4rem; }
+}

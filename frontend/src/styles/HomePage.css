@@ -2,15 +2,14 @@
   max-width: 1400px;
   margin: 2rem auto;
   padding: 2rem;
-  background-color: #f8f5ee;
+  background-color: var(--paper-card);
   box-shadow: 0 5px 25px rgba(0, 0, 0, 0.15);
   font-family: 'Times New Roman', Times, serif;
-  color: #222;
+  color: var(--ink);
   position: relative;
-  border: 1px solid #d0c8b0;
+  border: 1px solid var(--rule-strong);
   animation: fadeIn 0.5s ease-out;
 }
-
 .newspaper-container::before {
   content: '';
   position: absolute;
@@ -22,34 +21,28 @@
   pointer-events: none;
   z-index: 0;
 }
-
-@keyframes fadeIn {
-  from {
+@keyframes fadeIn {from {
     opacity: 0;
     transform: translateY(20px);
-  }
-  to {
+  }to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-
-.newspaper-masthead {
+.newspaper-container .newspaper-masthead {
   text-align: center;
   padding: 1.5rem 0;
-  border-bottom: 3px double #222;
+  border-bottom: 3px double var(--ink);
   margin-bottom: 2rem;
   position: relative;
 }
-
-.newspaper-date {
+.newspaper-container .newspaper-date {
   font-style: italic;
   font-size: 1rem;
   margin-bottom: 0.5rem;
-  color: #555;
+  color: var(--ink-soft);
 }
-
-.newspaper-name {
+.newspaper-container .newspaper-name {
   font-family: 'Times New Roman', Times, serif;
   font-size: 4rem;
   font-weight: 900;
@@ -57,102 +50,89 @@
   line-height: 1;
   letter-spacing: -1px;
   text-transform: uppercase;
-  color: #222;
+  color: var(--ink);
   text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
 }
-
-.newspaper-tagline {
+.newspaper-container .newspaper-tagline {
   font-style: italic;
   font-size: 1.1rem;
   font-weight: 400;
-  color: #555;
+  color: var(--ink-soft);
   letter-spacing: 1px;
 }
-
-.newspaper-categories {
+.newspaper-container .newspaper-categories {
   display: flex;
   align-items: center;
   padding: 0.75rem 0;
   margin-bottom: 2rem;
-  border-bottom: 1px solid #bdb399;
-  border-top: 1px solid #bdb399;
-  background-color: #f2eee3;
+  border-bottom: 1px solid var(--rule-heavy);
+  border-top: 1px solid var(--rule-heavy);
+  background-color: var(--paper-aged);
   position: relative;
   z-index: 5;
 }
-
-.category-label {
+.newspaper-container .category-label {
   font-weight: 700;
   margin-right: 1.5rem;
   font-size: 0.9rem;
   letter-spacing: 1px;
   white-space: nowrap;
 }
-
-.categories-list {
+.newspaper-container .categories-list {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
 }
-
-.category-btn {
+.newspaper-container .category-btn {
   background: none;
   border: none;
   font-family: 'Times New Roman', Times, serif;
   font-size: 0.95rem;
-  color: #555;
+  color: var(--ink-soft);
   cursor: pointer;
   padding: 0.25rem 0.75rem;
   transition: all 0.2s ease;
   position: relative;
 }
-
-.category-btn::after {
+.newspaper-container .category-btn::after {
   content: '|';
   position: absolute;
   right: -0.5rem;
-  color: #bdb399;
+  color: var(--rule-heavy);
 }
-
-.category-btn:last-child::after {
+.newspaper-container .category-btn:last-child::after {
   content: none;
 }
-
-.category-btn:hover {
-  color: #000;
+.newspaper-container .category-btn:hover {
+  color: var(--ink);
   text-decoration: underline;
 }
-
-.category-btn.active {
+.newspaper-container .category-btn.active {
   font-weight: 700;
-  color: #000;
+  color: var(--ink);
   text-decoration: underline;
 }
-
-.section-header {
+.newspaper-container .section-header {
   display: flex;
   align-items: center;
   margin-bottom: 2rem;
 }
-
-.section-divider {
+.newspaper-container .section-divider {
   flex-grow: 1;
   height: 5px;
-  background-color: #222;
+  background-color: var(--ink);
   position: relative;
 }
-
-.section-divider::before {
+.newspaper-container .section-divider::before {
   content: '';
   position: absolute;
   top: 8px;
   left: 0;
   width: 100%;
   height: 1px;
-  background-color: #222;
+  background-color: var(--ink);
 }
-
-.section-title {
+.newspaper-container .section-title {
   font-size: 2rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -160,42 +140,37 @@
   letter-spacing: -0.5px;
   white-space: nowrap;
 }
-
-.editor-note {
+.newspaper-container .editor-note {
   margin-bottom: 2rem;
   padding: 1rem;
-  border: 1px dashed #bdb399;
-  background-color: #f2eee3;
+  border: 1px dashed var(--rule-heavy);
+  background-color: var(--paper-aged);
   position: relative;
 }
-
-.editor-note::before {
+.newspaper-container .editor-note::before {
   content: '';
   position: absolute;
   top: 5px;
   left: 5px;
   right: 5px;
   bottom: 5px;
-  border: 1px dashed #bdb399;
+  border: 1px dashed var(--rule-heavy);
   pointer-events: none;
 }
-
-.editor-note-inner {
+.newspaper-container .editor-note-inner {
   padding: 0.5rem;
 }
-
-.editor-title {
+.newspaper-container .editor-title {
   font-size: 1.2rem;
   font-style: italic;
   margin-top: 0;
   margin-bottom: 0.5rem;
   font-weight: 700;
-  color: #222;
-  border-bottom: 1px solid #bdb399;
+  color: var(--ink);
+  border-bottom: 1px solid var(--rule-heavy);
   padding-bottom: 0.5rem;
 }
-
-.newspaper-grid {
+.newspaper-container .newspaper-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 2rem;
@@ -203,8 +178,7 @@
   position: relative;
   z-index: 2;
 }
-
-.newspaper-loading {
+.newspaper-container .newspaper-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -212,62 +186,49 @@
   min-height: 300px;
   text-align: center;
 }
-
-.typewriter {
+.newspaper-container .typewriter {
   display: inline-block;
   overflow: hidden;
-  border-right: 0.15em solid #222;
+  border-right: 0.15em solid var(--ink);
   white-space: nowrap;
   letter-spacing: 0.1em;
   animation: typing 3.5s steps(40, end) infinite, blink-caret 0.75s step-end infinite;
   margin-bottom: 1rem;
 }
-
-.typewriter-text {
+.newspaper-container .typewriter-text {
   display: inline-block;
   font-family: 'Courier New', Courier, monospace;
   font-weight: 700;
   font-size: 1.2rem;
 }
-
-@keyframes typing {
-  from { width: 0 }
-  to { width: 100% }
+@keyframes typing {from { width: 0 }to { width: 100% }
 }
-
-@keyframes blink-caret {
-  from, to { border-color: transparent }
-  50% { border-color: #222 }
+@keyframes blink-caret {from, to { border-color: transparent }50% { border-color: var(--ink) }
 }
-
-.loading-text {
+.newspaper-container .loading-text {
   font-style: italic;
-  color: #666;
+  color: var(--ink-muted);
 }
-
-.newspaper-error {
+.newspaper-container .newspaper-error {
   text-align: center;
   padding: 3rem 2rem;
-  border: 1px dashed #bdb399;
+  border: 1px dashed var(--rule-heavy);
   margin-bottom: 2rem;
 }
-
-.error-headline {
+.newspaper-container .error-headline {
   font-size: 2.5rem;
   font-weight: 900;
   margin-bottom: 1rem;
   text-transform: uppercase;
 }
-
-.error-subheading {
+.newspaper-container .error-subheading {
   font-size: 1.2rem;
   font-style: italic;
   margin-bottom: 1.5rem;
 }
-
-.retry-button {
-  background: #222;
-  color: #f8f5ee;
+.newspaper-container .retry-button {
+  background: var(--ink);
+  color: var(--paper-card);
   border: none;
   padding: 0.75rem 1.5rem;
   font-family: 'Times New Roman', Times, serif;
@@ -276,51 +237,44 @@
   transition: all 0.3s ease;
   margin-top: 1rem;
 }
-
-.retry-button:hover {
-  background: #000;
+.newspaper-container .retry-button:hover {
+  background: var(--ink);
   transform: translateY(-2px);
 }
-
-.newspaper-empty {
+.newspaper-container .newspaper-empty {
   text-align: center;
   padding: 3rem 2rem;
-  border: 1px dashed #bdb399;
+  border: 1px dashed var(--rule-heavy);
   margin-bottom: 2rem;
 }
-
-.empty-headline {
+.newspaper-container .empty-headline {
   font-size: 2rem;
   font-weight: 700;
   margin-bottom: 1rem;
   text-transform: uppercase;
 }
-
-.newspaper-footer {
+.newspaper-container .newspaper-footer {
   text-align: center;
   margin-top: 3rem;
   padding-top: 1rem;
   font-size: 0.9rem;
-  color: #666;
+  color: var(--ink-muted);
 }
-
-.footer-divider {
+.newspaper-container .footer-divider {
   height: 3px;
-  background-color: #222;
+  background-color: var(--ink);
   margin-bottom: 1rem;
   position: relative;
 }
-
-.footer-divider::before {
+.newspaper-container .footer-divider::before {
   content: '';
   position: absolute;
   top: 6px;
   left: 0;
   width: 100%;
   height: 1px;
-  background-color: #222;
+  background-color: var(--ink);
 }
-
 /* Add old paper texture effect */
 .newspaper-container::after {
   content: '';
@@ -337,85 +291,67 @@
   opacity: 0.5;
   z-index: 1;
 }
-
 /* Responsive styles */
-@media (max-width: 1200px) {
-  .newspaper-name {
+@media (max-width: 1200px) {.newspaper-container .newspaper-name {
     font-size: 3.5rem;
   }
-  
-  .newspaper-grid {
+.newspaper-container .newspaper-grid {
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 1.5rem;
   }
 }
-
-@media (max-width: 768px) {
-  .newspaper-container {
+@media (max-width: 768px) {.newspaper-container {
     padding: 1rem;
     margin: 1rem;
   }
-  
-  .newspaper-name {
+.newspaper-container .newspaper-name {
     font-size: 2.5rem;
   }
-  
-  .newspaper-categories {
+.newspaper-container .newspaper-categories {
     flex-direction: column;
     align-items: flex-start;
   }
-  
-  .category-label {
+.newspaper-container .category-label {
     margin-bottom: 0.5rem;
   }
-  
-  .category-btn {
+.newspaper-container .category-btn {
     font-size: 0.9rem;
     padding: 0.25rem 0.5rem;
   }
-  
-  .section-title {
+.newspaper-container .section-title {
     font-size: 1.5rem;
   }
 }
-
-@media (max-width: 480px) {
-  .newspaper-container {
+@media (max-width: 480px) {.newspaper-container {
     padding: 0.75rem;
     margin: 0.5rem;
   }
-  
-  .newspaper-name {
+.newspaper-container .newspaper-name {
     font-size: 2rem;
   }
-  
-  .newspaper-tagline {
+.newspaper-container .newspaper-tagline {
     font-size: 0.9rem;
   }
-  
-  .section-title {
+.newspaper-container .section-title {
     font-size: 1.2rem;
     margin: 0 0.75rem;
   }
-  
-  .newspaper-grid {
+.newspaper-container .newspaper-grid {
     grid-template-columns: 1fr;
     gap: 1.5rem;
   }
 }
-
 /* Additional newspaper texture effects */
-.newspaper-masthead::after {
+.newspaper-container .newspaper-masthead::after {
   content: '';
   position: absolute;
   bottom: -3px;
   left: 0;
   width: 100%;
   height: 1px;
-  background-color: #222;
+  background-color: var(--ink);
   z-index: 1;
 }
-
 /* Coffee stain effect */
 .newspaper-container::before {
   content: '';
@@ -431,7 +367,6 @@
   z-index: 0;
   opacity: 0.6;
 }
-
 /* Newspaper fold effect */
 .newspaper-container::after {
   content: '';
@@ -444,9 +379,8 @@
   pointer-events: none;
   z-index: 1;
 }
-
 /* Vintage paper texture */
-.newspaper-grid::before {
+.newspaper-container .newspaper-grid::before {
   content: '';
   position: absolute;
   top: 0;
@@ -457,151 +391,131 @@
   pointer-events: none;
   z-index: 0;
 }
-
 /* Pagination Styles */
-.newspaper-pagination {
+.newspaper-container .newspaper-pagination {
   display: flex;
   justify-content: center;
   align-items: center;
   margin: 2rem 0;
   position: relative;
 }
-
-.page-number {
+.newspaper-container .page-number {
   background: none;
-  border: 1px solid #bdb399;
+  border: 1px solid var(--rule-heavy);
   margin: 0 0.25rem;
   padding: 0.5rem 0.75rem;
   font-family: 'Times New Roman', Times, serif;
-  color: #555;
+  color: var(--ink-soft);
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
 }
-
-.page-number:hover {
-  background-color: #e5e1d5;
-  color: #222;
+.newspaper-container .page-number:hover {
+  background-color: var(--rule);
+  color: var(--ink);
 }
-
-.page-number.active {
-  background-color: #222;
-  color: #f8f5ee;
-  border-color: #222;
+.newspaper-container .page-number.active {
+  background-color: var(--ink);
+  color: var(--paper-card);
+  border-color: var(--ink);
   font-weight: 700;
 }
-
-.page-arrow {
+.newspaper-container .page-arrow {
   background: none;
   border: none;
   font-size: 1.5rem;
   padding: 0 0.5rem;
-  color: #555;
+  color: var(--ink-soft);
   cursor: pointer;
   transition: all 0.2s ease;
 }
-
-.page-arrow:disabled {
-  color: #bdb399;
+.newspaper-container .page-arrow:disabled {
+  color: var(--rule-heavy);
   cursor: not-allowed;
 }
-
-.page-arrow:not(:disabled):hover {
-  color: #222;
+.newspaper-container .page-arrow:not(:disabled):hover {
+  color: var(--ink);
   transform: scale(1.1);
 }
-
-.page-info {
+.newspaper-container .page-info {
   font-style: italic;
   margin: 0 0.5rem;
-  color: #555;
+  color: var(--ink-soft);
   font-size: 0.9rem;
 }
-
 /* Weather section styles */
-.weather-section {
-  border: 1px solid #bdb399;
+.newspaper-container .weather-section {
+  border: 1px solid var(--rule-heavy);
   padding: 1rem;
   margin-bottom: 2rem;
-  background-color: #f2eee3;
+  background-color: var(--paper-aged);
   position: relative;
 }
-
-.weather-header {
+.newspaper-container .weather-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #bdb399;
+  border-bottom: 1px solid var(--rule-heavy);
   padding-bottom: 0.5rem;
   margin-bottom: 1rem;
 }
-
-.weather-title {
+.newspaper-container .weather-title {
   font-size: 1.2rem;
   font-weight: 700;
   text-transform: uppercase;
   margin: 0;
 }
-
-.weather-date {
+.newspaper-container .weather-date {
   font-style: italic;
   font-size: 0.9rem;
-  color: #555;
+  color: var(--ink-soft);
 }
-
-.weather-grid {
+.newspaper-container .weather-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 1rem;
 }
-
-.weather-item {
+.newspaper-container .weather-item {
   text-align: center;
   padding: 0.75rem;
-  border: 1px dashed #bdb399;
+  border: 1px dashed var(--rule-heavy);
 }
-
-.weather-day {
+.newspaper-container .weather-day {
   font-weight: 700;
   margin-bottom: 0.5rem;
 }
-
-.weather-icon {
+.newspaper-container .weather-icon {
   font-size: 1.5rem;
   margin: 0.5rem 0;
 }
-
-.weather-temp {
+.newspaper-container .weather-temp {
   margin-top: 0.5rem;
   font-size: 0.9rem;
 }
-
 /* Advertisement styles */
-.newspaper-ad {
-  border: 1px dashed #bdb399;
+.newspaper-container .newspaper-ad {
+  border: 1px dashed var(--rule-heavy);
   padding: 1rem;
   text-align: center;
   margin: 2rem 0;
-  background-color: #f5f2ea;
+  background-color: var(--paper-card);
   font-family: 'Times New Roman', Times, serif;
   position: relative;
 }
-
-.newspaper-ad::before {
+.newspaper-container .newspaper-ad::before {
   content: 'ADVERTISEMENT';
   position: absolute;
   top: -0.6rem;
   left: 50%;
   transform: translateX(-50%);
-  background-color: #f8f5ee;
+  background-color: var(--paper-card);
   padding: 0 0.5rem;
   font-size: 0.7rem;
-  color: #888;
+  color: var(--ink-muted);
   letter-spacing: 1px;
 }
-
 /* Quote box styles */
-.newspaper-quote {
+.newspaper-container .newspaper-quote {
   font-style: italic;
   font-size: 1.2rem;
   text-align: center;
@@ -609,31 +523,118 @@
   margin: 2rem 0;
   position: relative;
 }
-
-.newspaper-quote::before,
-.newspaper-quote::after {
+.newspaper-container .newspaper-quote::before, .newspaper-container .newspaper-quote::after {
   content: '"';
   font-size: 4rem;
   line-height: 0;
   position: absolute;
-  color: #bdb399;
+  color: var(--rule-heavy);
 }
-
-.newspaper-quote::before {
+.newspaper-container .newspaper-quote::before {
   top: 2rem;
   left: 0.5rem;
 }
-
-.newspaper-quote::after {
+.newspaper-container .newspaper-quote::after {
   bottom: -0.5rem;
   right: 0.5rem;
 }
-
-.quote-author {
+.newspaper-container .quote-author {
   display: block;
   text-align: right;
   font-style: normal;
   font-size: 1rem;
   font-weight: 700;
   margin-top: 1rem;
+}/* ==========================================================================
+   The Verification Desk — paste a link for checking
+   Presented as a boxed notice on the front page, the way a newspaper sets
+   off a reader-submission panel.
+   ========================================================================= */
+.newspaper-container .wire-desk {
+  max-width: 1000px;
+  margin: 1.75rem auto 0.5rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--paper-card);
+  border: 1px solid var(--ink);
+  border-top: 4px double var(--ink);
+  position: relative;
+}
+.newspaper-container .wire-desk-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-bottom: 0.9rem;
+}
+.newspaper-container .wire-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid var(--rule-heavy);
+  background: var(--paper);
+  color: var(--accent);
+}
+.newspaper-container .wire-title {
+  margin: 0;
+  font-family: var(--headline-font);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+.newspaper-container .wire-strapline {
+  margin: 0.1rem 0 0;
+  font-size: 0.88rem;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+.newspaper-container .wire-form { display: flex; gap: 0.5rem; }
+.newspaper-container .wire-form input {
+  flex: 1;
+  padding: 0.6rem 0.8rem;
+  font-family: var(--body-font);
+  font-size: 0.92rem;
+  color: var(--ink-body);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+}
+.newspaper-container .wire-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.newspaper-container .wire-form button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.2rem;
+  font-family: var(--label-font);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--paper);
+  background: var(--ink);
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.newspaper-container .wire-form button:hover:not(:disabled) { background: var(--accent); }.newspaper-container .wire-form button:disabled { opacity: 0.45; cursor: not-allowed; }
+.newspaper-container .wire-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--trust-caution-soft);
+  border-left: 3px solid var(--trust-caution);
+  font-size: 0.85rem;
+  color: var(--ink-body);
+}
+.newspaper-container .wire-partial { color: var(--ink-soft); font-style: italic; }
+@media (max-width: 700px) {.newspaper-container .wire-desk { margin-inline: 1rem; padding: 1rem; }.newspaper-container .wire-form { flex-direction: column; }.newspaper-container .wire-form button { width: 100%; justify-content: center; }
 }
