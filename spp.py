@@ -3,6 +3,11 @@ AI-Powered News Trust and Credibility Analysis Platform
 Full Streamlit Web App - Newspaper themed, 9-module dashboard
 """
 
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
 import streamlit as st
 import streamlit.components.v1 as components
 import torch
@@ -10,6 +15,9 @@ import pandas as pd
 import sqlite3
 import hashlib
 import io
+import os
+import requests
+import html as html_lib
 from datetime import datetime
 from urllib.parse import urlparse
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
@@ -141,14 +149,26 @@ def load_models():
 
     bias_tokenizer = AutoTokenizer.from_pretrained(f"{MODELS_PATH}/bias_bert_model")
     bias_model = AutoModelForSequenceClassification.from_pretrained(f"{MODELS_PATH}/bias_bert_model")
-
+    
     clickbait_tokenizer = AutoTokenizer.from_pretrained(f"{MODELS_PATH}/clickbait_bert_model")
     clickbait_model = AutoModelForSequenceClassification.from_pretrained(f"{MODELS_PATH}/clickbait_bert_model")
+
+    # ---- New: Multilingual (Tamil + Malayalam offensive/misinformation) model ----
+    # Loaded defensively: if step4_train_multilingual.py hasn't been run yet,
+    # the rest of the app keeps working — the Multilingual module just shows
+    # a "not trained yet" message instead of crashing the whole dashboard.
+    multilingual_tokenizer, multilingual_model = None, None
+    try:
+        multilingual_tokenizer = AutoTokenizer.from_pretrained(f"{MODELS_PATH}/multilingual_bert_model")
+        multilingual_model = AutoModelForSequenceClassification.from_pretrained(f"{MODELS_PATH}/multilingual_bert_model")
+    except OSError:
+        pass  # model not trained/saved yet — handled in render_multilingual()
 
     return {
         "fake_news": (fake_news_tokenizer, fake_news_model),
         "bias": (bias_tokenizer, bias_model),
         "clickbait": (clickbait_tokenizer, clickbait_model),
+        "multilingual": (multilingual_tokenizer, multilingual_model),
     }
 
 
@@ -172,13 +192,50 @@ def predict_bias(text, tokenizer, model):
     return {"prediction": "Biased" if biased_prob > 0.5 else "Non-biased", "bias_score": biased_prob}
 
 
-def predict_clickbait(text, tokenizer, model):
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=64)
+def predict_clickbait(headline, tokenizer, model):
+    """
+    Binary classification on the headline text: index 0 = Not Clickbait,
+    index 1 = Clickbait (same convention as predict_fake_news/predict_bias).
+    """
+    inputs = tokenizer(headline, return_tensors="pt", truncation=True, padding=True, max_length=128)
     with torch.no_grad():
         outputs = model(**inputs)
     probs = torch.softmax(outputs.logits, dim=1)
     clickbait_prob = probs[0][1].item()
-    return {"prediction": "Clickbait" if clickbait_prob > 0.5 else "Not Clickbait", "clickbait_score": clickbait_prob}
+    return {
+        "prediction": "Clickbait" if clickbait_prob > 0.5 else "Not Clickbait",
+        "clickbait_score": clickbait_prob,
+    }
+
+def predict_multilingual(text, tokenizer, model):
+    """
+    Binary classification on Tamil/Malayalam text: 0 = Not_offensive, 1 = Offensive.
+    Trained via step4_train_multilingual.py on the combined DravidianCodeMix
+    Tamil + Malayalam dataset (cleaned_multilingual.csv).
+    """
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=128)
+    with torch.no_grad():
+        outputs = model(**inputs)
+    probs = torch.softmax(outputs.logits, dim=1)
+    offensive_prob = probs[0][1].item()
+    return {
+        "prediction": "Offensive / Suspicious" if offensive_prob > 0.5 else "Not Offensive",
+        "offensive_score": offensive_prob,
+        "trust_score": round((1 - offensive_prob) * 100, 2),
+    }
+
+
+def detect_dravidian_language(text):
+    """
+    Lightweight script-based language hint (no external API/dependency needed).
+    Tamil and Malayalam occupy distinct Unicode blocks, so this is reliable
+    for telling them apart even in code-mixed (Tanglish/Manglish) text.
+    """
+    tamil_chars = sum(1 for ch in text if "\u0B80" <= ch <= "\u0BFF")
+    malayalam_chars = sum(1 for ch in text if "\u0D00" <= ch <= "\u0D7F")
+    if tamil_chars == 0 and malayalam_chars == 0:
+        return "English / Other (Latin script)"
+    return "Tamil" if tamil_chars >= malayalam_chars else "Malayalam" 
 
 
 # =====================================================================
@@ -478,6 +535,176 @@ def get_article_text_from_input(input_mode, headline_input, text_input, pdf_file
 
     return headline_input, ""
 
+# =====================================================================
+# NEW: Live News Feed (NewsAPI) — categorized real-time headlines shown
+# on both the public Welcome page and the logged-in Home page.
+# =====================================================================
+
+NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY", "")  # set as an environment variable — never hardcode a real key here
+NEWSDATA_BASE_URL = "https://newsdata.io/api/1/latest"
+
+# NOTE: NewsData.io's own category list does NOT include "general" — the
+# closest equivalent is "top" (their top/general headlines category).
+# Passing category="general" silently returns zero articles, which is why
+# that tab used to be empty.
+NEWS_CATEGORIES = [
+    ("top", "🗞️ General"),
+    ("business", "💼 Business"),
+    ("sports", "🏆 Sports"),
+    ("technology", "💻 Technology"),
+    ("entertainment", "🎬 Entertainment"),
+    ("health", "🩺 Health"),
+    ("science", "🔬 Science"),
+]
+
+# language toggle for the news feed — "en" for English-language India news,
+# "ta" for Tamil-language news (both filtered to country=in via NewsData.io)
+NEWS_LANGUAGE_OPTIONS = [("en", "English"), ("ta", "தமிழ் (Tamil)")]
+
+# Target number of articles per category tab. NewsData.io returns ~10
+# articles per page, so we page through "nextPage" until we hit this
+# target (or run out of pages) to comfortably fill a 4-column grid.
+TARGET_ARTICLES_PER_CATEGORY = 24
+MAX_PAGES_PER_CATEGORY = 3  # safety cap so we don't burn the daily quota
+
+
+@st.cache_data(ttl=900, show_spinner=False)  # cache 15 min — respects NewsData.io free-tier rate limits
+def fetch_live_news(category="top", country="in", language="en", target_count=TARGET_ARTICLES_PER_CATEGORY):
+    """
+    Fetches live news for one category from NewsData.io, filtered to India
+    (country='in') and a chosen language (English or Tamil). Tamil articles
+    are pulled from Tamil-language Indian outlets — this is what actually
+    surfaces Tamil Nadu-relevant coverage, unlike a generic country filter.
+
+    Pages through NewsData.io's "nextPage" cursor (a single API call only
+    returns ~10 articles) so each category tab can show 20-30 articles
+    instead of just one page's worth. Returns [] (never raises) if the key
+    is missing/invalid or the request fails, so callers can show a
+    friendly empty-state instead of crashing.
+    """
+    if not NEWSDATA_API_KEY:
+        return []
+
+    articles = []
+    next_page_token = None
+
+    for _ in range(MAX_PAGES_PER_CATEGORY):
+        params = {
+            "apikey": NEWSDATA_API_KEY,
+            "category": category,
+            "country": country,
+            "language": language,
+        }
+        if next_page_token:
+            params["page"] = next_page_token
+
+        try:
+            response = requests.get(NEWSDATA_BASE_URL, params=params, timeout=8)
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as e:
+            print(f"NewsData.io fetch failed for category={category}, language={language}: {e}")
+            break
+
+        articles.extend(payload.get("results", []) or [])
+        next_page_token = payload.get("nextPage")
+
+        if not next_page_token or len(articles) >= target_count:
+            break
+
+    # ---- Clean the batch before handing it to the grid ----
+    # Drop entries with no usable headline (these used to render as blank/
+    # broken cards) and de-duplicate by link (NewsData.io's free-tier
+    # pagination sometimes repeats an article across pages, which used to
+    # leave visible gaps in the 4-column grid).
+    seen_links = set()
+    cleaned = []
+    for article in articles:
+        title = (article.get("title") or "").strip()
+        link = article.get("link") or ""
+        if not title:
+            continue
+        if link and link in seen_links:
+            continue
+        if link:
+            seen_links.add(link)
+        cleaned.append(article)
+
+    return cleaned[:target_count]
+def render_live_news_section():
+    """Categorized live news feed — shown on both Welcome (public) and Home (logged-in) pages."""
+    st.markdown('<div class="section-title" style="margin-top:50px;">Live News, By Category</div><div class="section-line"></div>', unsafe_allow_html=True)
+
+    if not NEWSDATA_API_KEY:
+        st.info(
+            "Live news isn't configured yet. Get a free API key from "
+            "[newsdata.io](https://newsdata.io) and set it as the `NEWSDATA_API_KEY` "
+            "environment variable to enable this section."
+        )
+        return
+
+    lang_labels = [label for _, label in NEWS_LANGUAGE_OPTIONS]
+    selected_lang_label = st.radio("Language", lang_labels, horizontal=True, key="live_news_language")
+    selected_lang_code = dict(zip(lang_labels, [code for code, _ in NEWS_LANGUAGE_OPTIONS]))[selected_lang_label]
+
+    tab_labels = [label for _, label in NEWS_CATEGORIES]
+    tabs = st.tabs(tab_labels)
+
+    for tab, (cat_id, _) in zip(tabs, NEWS_CATEGORIES):
+        with tab:
+            with st.spinner(f"Loading {cat_id} news..."):
+                articles = fetch_live_news(category=cat_id, language=selected_lang_code)
+
+            if not articles:
+                st.write("No live headlines available for this category right now.")
+                continue
+
+            # 4 equal-width columns -> consistent grid, however many rows it takes
+            num_cols = 4
+            cols = st.columns(num_cols)
+            for i, article in enumerate(articles):
+                with cols[i % num_cols]:
+                    # Escape everything that comes from the API before dropping
+                    # it into raw HTML — an unescaped "&" or quote inside a
+                    # headline was breaking the markup for that card (and
+                    # sometimes the ones after it), which is what showed up
+                    # as cards with missing photos/text.
+                    title = html_lib.escape((article.get("title") or "Untitled").strip())
+                    source_raw = article.get("source_id") or "Unknown source"
+                    source_name = html_lib.escape(source_raw.upper() if isinstance(source_raw, str) else str(source_raw))
+                    url = html_lib.escape(article.get("link") or "#", quote=True)
+                    image_url = article.get("image_url")
+
+                    if image_url:
+                        image_url_safe = html_lib.escape(image_url, quote=True)
+                        # A <img onerror="..."> tag was leaving a small broken-image
+                        # icon in the corner when the URL 404'd, because Streamlit's
+                        # markdown sandbox doesn't reliably fire inline JS handlers.
+                        # A background-image div sidesteps that entirely: if the URL
+                        # fails to load, the browser just shows nothing and the
+                        # element's own background-color (set in CSS) stays visible —
+                        # no broken-icon artifact possible.
+                        img_html = f'<div class="news-card-img" style="background-image:url(\'{image_url_safe}\');"></div>'
+                    else:
+                        img_html = '<div class="news-card-noimg">No Photograph Available</div>'
+
+                    st.markdown(
+                        f"""
+                        <div class="news-card">
+                            {img_html}
+                            <div class="news-card-body">
+                                <div class="news-card-title">{title}</div>
+                            </div>
+                            <div class="news-card-footer">
+                                <span class="news-card-source">{source_name}</span>
+                                <span class="news-card-date">{datetime.now().strftime('%A, %d %B %Y')}</span>
+                            </div>
+                            <a href="{url}" target="_blank" class="news-card-link">Read more &rarr;</a>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
 
 MODULES = [
     {"id": "fake_news", "icon": "🔍", "title": "Fake News Detection",
@@ -499,8 +726,8 @@ MODULES = [
      "desc": "Why the AI made this decision", "status": "active",
      "detail": "Instead of a black-box label, this module surfaces plain-language reasons behind every prediction — low credibility, high bias, clickbait language, etc."},
     {"id": "multilingual", "icon": "🌐", "title": "Multilingual Analysis",
-     "desc": "Tamil, Hindi, Malayalam support", "status": "coming_soon",
-     "detail": "An XLM-RoBERTa model trained on Tamil and Malayalam offensive/misinformation datasets (60,000+ rows) — training in progress."},
+     "desc": "Tamil, Malayalam support", "status": "active",
+     "detail": "An XLM-RoBERTa model fine-tuned on the DravidianCodeMix Tamil and Malayalam offensive/misinformation dataset (60,000+ rows) — detects offensive or suspicious language directly in Tamil or Malayalam text."},
     {"id": "propagation", "icon": "📈", "title": "News Propagation",
      "desc": "How news spreads across platforms", "status": "active",
      "detail": "Analyzes tweet-spread data from the FakeNewsNet dataset (23,000+ articles) to compare how fast and far fake vs real news spreads."},
@@ -533,7 +760,7 @@ st.markdown("""
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Lora:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,800;0,900;1,700&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&display=swap');
 
 @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(18px); }
@@ -544,282 +771,393 @@ st.markdown("""
     to { opacity: 1; }
 }
 @keyframes cardEntrance {
-    0% { opacity: 0; transform: translateY(40px) scale(0.85) rotate(-4deg); }
-    60% { opacity: 1; transform: translateY(-6px) scale(1.02) rotate(1deg); }
-    100% { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+    0% { opacity: 0; transform: translateY(28px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+html, :root {
+    color-scheme: light;
+}
+
+:root {
+    --ink: #1a1a1a;
+    --paper: #f4f1ea;
+    --paper-2: #ece6d8;
+    --rule: #1a1a1a;
+    --maroon: #7a1414;
+    --maroon-2: #9c1f1f;
+    --sepia: #6b5b3e;
 }
 
 .stApp {
-    background:
-        radial-gradient(circle at 12% 65%, rgba(216, 27, 178, 0.55) 0%, transparent 45%),
-        radial-gradient(circle at 88% 10%, rgba(37, 60, 230, 0.55) 0%, transparent 50%),
-        linear-gradient(135deg, #0a0118 0%, #1a0933 30%, #2d0a5e 60%, #150730 100%);
+    background: var(--paper);
+    background-image:
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.015) 0px, rgba(0,0,0,0.015) 1px, transparent 1px, transparent 3px);
     background-attachment: fixed;
-    background-size: cover;
 }
-/* Global light-text fallback for the dark theme.
-   NOTE: h1-h4 intentionally excluded here — card/step headings set their
-   own dark color further down and must not be repainted light by this rule. */
+/* Global ink-on-paper text */
 .stApp, .stApp p, .stApp span, .stApp label, .stApp li,
 .stApp .stMarkdown, .stApp div[data-testid="stMarkdownContainer"] {
-    color: #f0eaff;
+    color: var(--ink);
+    font-family: 'Lora', 'Old Standard TT', Georgia, serif;
 }
-
 
 .navbar-brand {
     font-family: 'Playfair Display', serif;
-    font-weight: 500;
-    font-size: 26px;
-    letter-spacing: 1px;
-    color: #ffffff;
-    padding-top: 8px;
+    font-weight: 900;
+    font-size: 34px;
+    letter-spacing: 2px;
+    color: var(--ink);
+    padding-top: 6px;
+    text-transform: uppercase;
 }
 .navbar-brand span {
     font-family: 'Lora', serif;
     font-style: italic;
     font-weight: 400;
-    font-size: 14px;
-    color: #b9a6e0;
+    font-size: 13px;
+    color: var(--sepia);
     margin-left: 10px;
+    text-transform: none;
+    letter-spacing: 0.5px;
 }
 .nav-user {
     font-family: 'Lora', serif;
+    font-style: italic;
     padding-top: 14px;
     text-align: right;
-    font-size: 16px;
-    color: #f0eaff;
+    font-size: 15px;
+    color: var(--ink);
 }
 .navbar-divider {
-    border-bottom: 2px solid rgba(255,255,255,0.25);
-    margin: 4px 0 24px 0;
+    border-bottom: 3px double var(--rule);
+    margin: 4px 0 26px 0;
 }
 
 .hero-wrap {
     text-align: center;
-    padding: 10px 10px 10px 10px;
-    margin-bottom: 24px;
+    padding: 6px 10px 14px 10px;
+    margin-bottom: 6px;
+    border-top: 2px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
     animation: fadeInUp 0.6s ease;
 }
 .stat-box {
     text-align: center;
-    padding: 16px 10px;
-    background: linear-gradient(135deg, #ffffff 0%, #f3eefc 100%);
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.5);
+    padding: 18px 10px;
+    background: #ffffff;
+    border-radius: 0px;
+    border: 1.5px solid var(--rule);
     margin-bottom: 30px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.12);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     animation: fadeInUp 0.8s ease;
 }
 .stat-box:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 22px rgba(155,127,255,0.35);
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 rgba(122,20,20,0.35);
 }
 .stat-num {
     font-family: 'Playfair Display', serif;
     font-weight: 800;
-    font-size: 38px;
-    color: #6d28d9;
+    font-size: 36px;
+    color: var(--maroon);
 }
 .stat-label {
     font-family: 'Lora', serif;
-    font-size: 17px;
-    color: #555;
+    font-style: italic;
+    font-size: 15px;
+    color: #444;
     margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 .brand {
     font-family: 'Playfair Display', serif;
-    font-weight: 800;
+    font-weight: 900;
     font-size: 28px;
     letter-spacing: 2px;
-    color: #ffffff;
+    color: var(--ink);
 }
-.brand-sub { font-family: 'Lora', serif; font-style: italic; color: #b9a6e0; font-size: 13px; }
+.brand-sub { font-family: 'Lora', serif; font-style: italic; color: var(--sepia); font-size: 13px; }
 .hero-title {
     font-family: 'Playfair Display', serif;
-    font-weight: 800;
-    font-size: 52px;
-    color: #ffffff;
-    margin: 18px 0 6px 0;
+    font-weight: 900;
+    font-size: 58px;
+    color: var(--ink);
+    margin: 10px 0 4px 0;
+    letter-spacing: 0.5px;
 }
 .hero-sub {
     font-family: 'Lora', serif;
     font-style: italic;
-    color: #cbbfe6;
-    font-size: 21px;
-    margin-bottom: 20px;
+    color: #555;
+    font-size: 18px;
+    margin-bottom: 10px;
+    border-top: 1px solid #999;
+    padding-top: 8px;
+    display: inline-block;
 }
 .section-title {
     font-family: 'Playfair Display', serif;
     font-weight: 800;
-    font-style: italic;
-    font-size: 30px;
+    font-style: normal;
+    font-size: 26px;
     text-align: center;
-    color: #ffffff;
+    color: var(--ink);
     margin-top: 30px;
-    text-shadow: 0 2px 12px rgba(155,127,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    text-shadow: none;
 }
 .section-line {
-    width: 60px; height: 3px; background: linear-gradient(90deg, #9b7fff, #d81bb2); margin: 8px auto 30px auto;
+    width: 100%;
+    max-width: 640px;
+    height: 3px;
+    background: var(--rule);
+    margin: 8px auto 30px auto;
+    position: relative;
+}
+.section-line::after {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 1px;
+    background: var(--rule);
+    margin-top: 4px;
 }
 
 .card {
-    background: var(--bgcolor, #eee);
-    border-radius: 6px;
+    background: var(--bgcolor, #ffffff);
+    border-radius: 0px;
     padding: 22px 16px;
     text-align: center;
-    box-shadow: 4px 6px 14px rgba(0,0,0,0.15);
-    border: 1px solid rgba(0,0,0,0.06);
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.15);
+    border: 1.5px solid var(--rule);
     height: 210px;
-    transform: rotate(var(--tilt, 0deg));
-    transition: transform 0.35s cubic-bezier(.25,.8,.25,1), box-shadow 0.35s ease;
+    transform: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     cursor: default;
     animation: fadeInUp 0.7s ease;
 }
 .card:hover {
-    transform: rotate(0deg) translateY(-10px) scale(1.04);
-    box-shadow: 8px 16px 32px rgba(0,0,0,0.28);
+    transform: translate(-3px, -3px);
+    box-shadow: 6px 6px 0 rgba(122,20,20,0.35);
     z-index: 10;
     position: relative;
 }
 .card .icon {
     font-size: 26px;
     margin-bottom: 8px;
-    transition: transform 0.35s ease;
+    transition: transform 0.3s ease;
 }
-.card:hover .icon { transform: scale(1.25) rotate(-8deg); }
+.card:hover .icon { transform: scale(1.15); }
 .card h3 {
     font-family: 'Playfair Display', serif;
-    font-size: 24px !important;
+    font-size: 22px !important;
     font-weight: 800 !important;
     color: #1a1a1a !important;
     margin: 6px 0 8px 0;
     line-height: 1.25;
 }
-.card p { font-family: 'Lora', serif; font-size: 16px !important; color: #333 !important; margin-bottom: 6px; }
+.card p { font-family: 'Lora', serif; font-size: 15px !important; color: #333 !important; margin-bottom: 6px; font-style: italic; }
 .badge {
     display: inline-block;
     padding: 3px 12px;
-    border-radius: 10px;
-    font-size: 13px;
+    border-radius: 0px;
+    font-size: 12px;
     font-weight: 700;
     font-family: 'Lora', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--rule);
 }
-.badge-active { background: #1a1a1a; color: #faf6ea; box-shadow: 0 0 0 rgba(26,26,26,0.4); animation: pulseGlow 2.5s infinite; }
-.badge-basic { background: #b08d3f; color: #faf6ea; }
-.badge-soon { background: #ffffffaa; color: #555; border: 1px solid #999; }
-
-@keyframes pulseGlow {
-    0% { box-shadow: 0 0 0 0 rgba(26,26,26,0.25); }
-    70% { box-shadow: 0 0 0 6px rgba(26,26,26,0); }
-    100% { box-shadow: 0 0 0 0 rgba(26,26,26,0); }
-}
+.badge-active { background: var(--ink); color: #faf6ea; }
+.badge-basic { background: var(--sepia); color: #faf6ea; }
+.badge-soon { background: #ffffff; color: #555; border: 1px solid #999; }
 
 .flat-card {
-    background: linear-gradient(160deg, #ffffff 55%, var(--flatbg, #f5f5f5) 100%);
-    border-radius: 6px;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    background: var(--flatbg, #ffffff);
+    border-radius: 18px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.12);
     margin-bottom: 8px;
     overflow: hidden;
     height: 250px;
-    border: 1.5px solid var(--flatborder, #e0e0e0) !important;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-    animation: cardEntrance 0.7s cubic-bezier(.25,.8,.25,1) both;
+    border: 1.5px solid var(--rule) !important;
+    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 0.32s ease,
+                border-color 0.32s ease;
+    animation: cardEntrance 0.6s ease both;
+    position: relative;
+}
+.flat-card::after {
+    /* soft accent glow that fades in at the corners on hover */
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 18px;
+    box-shadow: 0 0 0 0 rgba(122,20,20,0);
+    transition: box-shadow 0.32s ease;
+    pointer-events: none;
 }
 .flat-card:nth-child(1) { animation-delay: 0.05s; }
 .flat-card:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 14px 28px rgba(79,95,174,0.25);
+    transform: translateY(-9px) scale(1.015);
+    box-shadow: 0 18px 34px rgba(122,20,20,0.22), 0 6px 14px rgba(0,0,0,0.12);
+    border-color: var(--flatborder, var(--maroon)) !important;
 }
-.flat-card-bar { height: 5px; }
-.flat-card p { min-height: 34px; font-size: 16px !important; color: #333 !important; }
-.flat-card .icon { font-size: 28px !important; margin-bottom: 4px; }
-.flat-card h3 { font-size: 24px !important; font-weight: 800 !important; color: #1a1a1a !important; margin: 4px 0 8px 0 !important; line-height: 1.25; }
+.flat-card:hover::after {
+    box-shadow: 0 0 0 3px var(--flatborder, var(--maroon)), 0 0 22px 2px rgba(122,20,20,0.25) inset;
+}
+.flat-card-bar {
+    height: 4px;
+    background: var(--maroon) !important;
+    transition: height 0.32s ease, filter 0.32s ease;
+}
+.flat-card:hover .flat-card-bar {
+    height: 8px;
+    filter: brightness(1.15);
+}
+.flat-card p { min-height: 34px; font-size: 15px !important; color: #333 !important; font-style: italic; }
+.flat-card .icon {
+    font-size: 26px !important;
+    margin-bottom: 4px;
+    display: inline-block;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.flat-card:hover .icon { transform: scale(1.3) rotate(-8deg); }
+.flat-card h3 {
+    font-size: 22px !important;
+    font-weight: 800 !important;
+    color: #1a1a1a !important;
+    margin: 4px 0 8px 0 !important;
+    line-height: 1.25;
+    transition: color 0.32s ease;
+}
+.flat-card:hover h3 { color: var(--maroon) !important; }
+.flat-card .status-badge {
+    transition: transform 0.3s ease;
+}
+.flat-card:hover .status-badge { transform: scale(1.06); }
+
+/* ---- Module status badges (Active / Basic / Coming Soon) on the
+   "Explore All Modules" flat cards. Custom classes replace the plain
+   Bootstrap bg-dark badge (whose text was getting swallowed by the
+   global ink-on-paper text rule above, since Bootstrap's own badge
+   text color didn't win the specificity fight). ---- */
+.stApp span.status-badge {
+    display: inline-block;
+    padding: 4px 14px !important;
+    border-radius: 999px !important;
+    font-family: 'Lora', serif !important;
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border: 1.5px solid var(--ink) !important;
+}
+.stApp span.status-badge-active {
+    background: #4caf50 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border-color: #2e7d32 !important;
+    text-shadow: none;
+}
+.stApp span.status-badge-basic {
+    background: #f5e3a8 !important;
+    color: #5a4300 !important;
+    -webkit-text-fill-color: #5a4300 !important;
+    border-color: #b8942e !important;
+}
+.stApp span.status-badge-soon {
+    background: #f0ece0 !important;
+    color: #666 !important;
+    -webkit-text-fill-color: #666 !important;
+    border-color: #999 !important;
+}
 
 .step-card {
-    background: linear-gradient(135deg, #ffffff 0%, #f0eafc 100%);
-    border: 1px solid rgba(0,0,0,0.06);
-    border-radius: 6px;
+    background: #ffffff;
+    border: 1.5px solid var(--rule);
+    border-radius: 0px;
     padding: 20px 14px;
     text-align: center;
     height: 190px;
-    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     animation: fadeInUp 0.7s ease;
 }
 .step-card:hover {
-    transform: translateY(-6px);
-    box-shadow: 0 12px 24px rgba(155,127,255,0.3);
-    border-color: #9b7fff;
+    transform: translate(-3px, -3px);
+    box-shadow: 6px 6px 0 rgba(122,20,20,0.3);
 }
 .step-circle {
     width: 40px; height: 40px;
-    background: linear-gradient(135deg, #9b7fff, #d81bb2);
-    color: white;
+    background: var(--maroon);
+    color: #fff;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-family: 'Playfair Display', serif;
     font-weight: 700;
     margin: 0 auto 12px auto;
-    transition: transform 0.3s ease, background 0.3s ease;
+    border: 2px solid var(--rule);
 }
-.step-card:hover .step-circle { transform: scale(1.15); }
 .step-card h3 { font-family: 'Playfair Display', serif; font-size: 18px; margin-bottom: 6px; color: #1a1a1a; }
-.step-card p { font-family: 'Lora', serif; font-size: 14px; color: #444; }
+.step-card p { font-family: 'Lora', serif; font-size: 14px; color: #444; font-style: italic; }
 
 .flow-step {
-    background: linear-gradient(135deg, #ffffff 0%, #f3eefc 100%);
-    border: 1px solid rgba(0,0,0,0.06);
-    border-radius: 8px;
+    background: #ffffff;
+    border: 1.5px solid var(--rule);
+    border-radius: 0px;
     padding: 16px 22px;
     display: flex;
     align-items: center;
     gap: 18px;
-    box-shadow: 0 6px 16px rgba(0,0,0,0.12);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     animation: fadeInUp 0.6s ease;
 }
-.flow-step:hover { transform: translateX(6px); box-shadow: 0 8px 20px rgba(155,127,255,0.25); }
-.flow-step h3 { font-family: 'Playfair Display', serif; font-size: 24px !important; font-weight: 800 !important; margin: 0 0 4px 0; color: #1a1a1a !important; }
-.flow-step p { font-family: 'Lora', serif; font-size: 17px !important; color: #333 !important; margin: 0; }
+.flow-step:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 rgba(122,20,20,0.3); }
+.flow-step h3 { font-family: 'Playfair Display', serif; font-size: 22px !important; font-weight: 800 !important; margin: 0 0 4px 0; color: #1a1a1a !important; }
+.flow-step p { font-family: 'Lora', serif; font-size: 16px !important; color: #333 !important; margin: 0; font-style: italic; }
 .flow-num {
     min-width: 38px; height: 38px;
-    background: linear-gradient(135deg, #9b7fff, #d81bb2);
+    background: var(--maroon);
     color: white;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-family: 'Playfair Display', serif;
     font-weight: 700;
     font-size: 16px;
+    border: 2px solid var(--rule);
 }
 .highlight-step {
-    background: linear-gradient(135deg, #f3eefc 0%, #fbe8f5 100%);
-    border: 1.5px solid #9b7fff;
+    background: var(--paper-2);
+    border: 2px solid var(--maroon);
 }
 .flow-arrow {
     text-align: center;
     font-size: 22px;
-    color: #b39dff;
+    color: var(--maroon);
     margin: 6px 0;
     animation: fadeIn 0.8s ease;
 }
 .module-chip {
-    background: linear-gradient(135deg, #ffffff 0%, #f3eefc 100%);
-    border: 1px solid rgba(0,0,0,0.06);
-    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid var(--rule);
+    border-radius: 0px;
     padding: 10px 4px;
     text-align: center;
     margin-top: 10px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.10);
-    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .module-chip:hover {
-    transform: translateY(-4px) scale(1.06);
-    box-shadow: 0 8px 16px rgba(155,127,255,0.3);
-    border-color: #9b7fff;
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0 rgba(122,20,20,0.3);
 }
 .chip-label {
     font-family: 'Lora', serif;
-    font-size: 14px;
+    font-size: 13px;
     color: #333;
     margin-top: 4px;
     line-height: 1.25;
@@ -827,101 +1165,168 @@ st.markdown("""
 }
 
 .cta-banner {
-    background: linear-gradient(135deg, #7c3aed 0%, #d81bb2 50%, #4338ca 100%);
-    border-radius: 10px;
-    padding: 40px 20px;
+    background: var(--ink);
+    border: 3px double #fff;
+    outline: 1.5px solid var(--ink);
+    border-radius: 0px;
+    padding: 38px 20px;
     text-align: center;
-    color: white;
+    color: #f4f1ea;
     margin-top: 40px;
+    margin-bottom: 28px;
     animation: fadeIn 1s ease;
-    box-shadow: 0 10px 30px rgba(155,127,255,0.4);
+    box-shadow: 5px 5px 0 rgba(122,20,20,0.4);
 }
-.cta-banner h2 { font-family: 'Playfair Display', serif; font-size: 28px; margin-bottom: 8px; color: #ffffff; }
-.cta-banner p { font-family: 'Lora', serif; font-style: italic; opacity: 0.9; margin-bottom: 0; color: #ffffff; }
+.cta-banner h2 { font-family: 'Playfair Display', serif; font-size: 28px; margin-bottom: 8px; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; text-transform: uppercase; letter-spacing: 1px; }
+.cta-banner p { font-family: 'Lora', serif; font-style: italic; opacity: 0.9; margin-bottom: 0; color: #e8e0cf !important; -webkit-text-fill-color: #e8e0cf !important; }
 
 div[data-testid="stButton"] button {
-    border-radius: 4px !important;
-    border: 1.5px solid rgba(0,0,0,0.15) !important;
-    background: linear-gradient(135deg, #ffffff 0%, #f0eafc 100%) !important;
+    border-radius: 0px !important;
+    border: 1.5px solid var(--ink) !important;
+    background: #ffffff !important;
     color: #1a1a1a !important;
     font-family: 'Lora', serif !important;
-    font-weight: 800 !important;
+    font-weight: 700 !important;
     letter-spacing: 0.5px;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.15);
-    transition: all 0.25s cubic-bezier(.25,.8,.25,1) !important;
+    text-transform: uppercase;
+    font-size: 13px !important;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.2);
+    transition: all 0.15s ease !important;
 }
 div[data-testid="stButton"] button:hover {
-    background: linear-gradient(135deg, #9b7fff, #d81bb2) !important;
+    background: var(--maroon) !important;
     color: #ffffff !important;
-    border-color: transparent !important;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(155,127,255,0.45);
+    border-color: var(--ink) !important;
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0 rgba(122,20,20,0.4);
 }
-div[data-testid="stButton"] button:active { transform: translateY(0); }
+div[data-testid="stButton"] button:active { transform: translate(0,0); }
 
 div[data-testid="stButton"] button[kind="primary"] {
-    background: linear-gradient(135deg, #9b7fff, #d81bb2) !important;
+    background: var(--maroon) !important;
     color: white !important;
-    font-weight: 800 !important;
-    border: none !important;
-    box-shadow: 0 4px 14px rgba(155,127,255,0.45) !important;
+    font-weight: 700 !important;
+    border: 1.5px solid var(--ink) !important;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.3) !important;
 }
 div[data-testid="stButton"] button[kind="primary"]:hover {
-    background: linear-gradient(135deg, #b39dff, #ec4bce) !important;
-    box-shadow: 0 8px 20px rgba(155,127,255,0.6) !important;
-    transform: translateY(-3px) scale(1.02);
+    background: var(--maroon-2) !important;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.35) !important;
+    transform: translate(-2px, -2px);
 }
 
-/* ---- Login button: smaller size, yellow-to-red gradient, white text, blue text-shadow ---- */
+/* ---- Login/Signup buttons: spacing is controlled directly via
+   st.columns([1,1], gap="small") in render_navbar() — the button-level
+   padding below keeps them compact so the pair sits close together. ---- */
+
+/* ---- Welcome page CTA buttons (Login / Sign Up Free) get their small
+   size from the shared primary-button padding below; spacing is
+   controlled directly via st.columns ratios in render_welcome(). ---- */
+
+/* ---- Login button: masthead-style small maroon button ---- */
 .st-key-nav_login button {
-    background: linear-gradient(120deg, #ffd93d 0%, #ff512f 100%) !important;
+    background: var(--maroon) !important;
     color: #ffffff !important;
-    text-shadow: 1px 1px 4px #1e3a8a, 0 0 8px #1e3a8a !important;
-    border: none !important;
+    text-shadow: none !important;
+    border: 1.5px solid var(--ink) !important;
     font-family: 'Playfair Display', serif !important;
     font-weight: 700 !important;
     font-style: italic !important;
-    font-size: 13px !important;
+    font-size: 11px !important;
     letter-spacing: 0.5px !important;
     padding: 4px 10px !important;
-    min-height: 32px !important;
-    box-shadow: 0 4px 14px rgba(255,81,47,0.4) !important;
-    animation: btnPulse 3s ease-in-out infinite;
+    min-height: 28px !important;
+    white-space: nowrap !important;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.25) !important;
+    text-transform: uppercase;
 }
 .st-key-nav_login button:hover {
-    background: linear-gradient(120deg, #ffe066 0%, #ff6b47 100%) !important;
-    transform: translateY(-3px) scale(1.05);
-    box-shadow: 0 10px 24px rgba(255,81,47,0.55) !important;
+    background: var(--maroon-2) !important;
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.3) !important;
 }
 
-/* ---- Signup button: gold-yellow-white gradient, white text, blue text-shadow ---- */
+/* ---- Signup button: ink-black outline button ---- */
 .st-key-nav_signup button {
-    background: linear-gradient(120deg, #d4af37 0%, #ffe259 45%, #ffffff 100%) !important;
+    background: var(--ink) !important;
     color: #ffffff !important;
-    text-shadow: 1px 1px 4px #1e3a8a, 0 0 8px #1e3a8a !important;
-    border: none !important;
+    text-shadow: none !important;
+    border: 1.5px solid var(--ink) !important;
     font-family: 'Playfair Display', serif !important;
     font-weight: 700 !important;
     font-style: italic !important;
-    font-size: 13px !important;
+    font-size: 11px !important;
     letter-spacing: 0.5px !important;
     padding: 4px 10px !important;
-    min-height: 32px !important;
-    box-shadow: 0 4px 14px rgba(212,175,55,0.45) !important;
-    animation: btnPulse 3s ease-in-out infinite 0.4s;
+    min-height: 28px !important;
+    white-space: nowrap !important;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.25) !important;
+    text-transform: uppercase;
 }
 .st-key-nav_signup button:hover {
-    background: linear-gradient(120deg, #e6c34a 0%, #fff08a 45%, #ffffff 100%) !important;
-    transform: translateY(-3px) scale(1.05);
-    box-shadow: 0 10px 24px rgba(212,175,55,0.6) !important;
+    background: var(--maroon-2) !important;
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.3) !important;
 }
 
-@keyframes btnPulse {
-    0%, 100% { box-shadow: 0 4px 14px rgba(255,81,47,0.35); }
-    50% { box-shadow: 0 4px 22px rgba(255,81,47,0.6); }
+/* ---- History / Logout buttons (logged-in navbar): same compact
+   red style + same fixed size as Login/Sign Up, so both buttons match
+   instead of auto-sizing to their text length. ---- */
+.st-key-nav_history button,
+.st-key-nav_logout button {
+    background: var(--maroon) !important;
+    color: #ffffff !important;
+    text-shadow: none !important;
+    border: 1.5px solid var(--ink) !important;
+    font-family: 'Playfair Display', serif !important;
+    font-weight: 700 !important;
+    font-style: italic !important;
+    font-size: 11px !important;
+    letter-spacing: 0.5px !important;
+    padding: 4px 10px !important;
+    min-height: 28px !important;
+    width: 110px !important;
+    white-space: nowrap !important;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.25) !important;
+    text-transform: uppercase;
+}
+.st-key-nav_history button:hover,
+.st-key-nav_logout button:hover {
+    background: var(--maroon-2) !important;
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.3) !important;
 }
 
-/* ---- Native Streamlit inputs/metrics readable on dark background ---- */
+/* ---- Welcome page Login / Sign Up Free buttons: same fixed size +
+   compact red style as the navbar History/Logout buttons, so both
+   sit evenly instead of auto-sizing to text length. ---- */
+.st-key-welcome_login button,
+.st-key-welcome_signup button {
+    background: var(--maroon) !important;
+    color: #ffffff !important;
+    text-shadow: none !important;
+    border: 1.5px solid var(--ink) !important;
+    font-family: 'Playfair Display', serif !important;
+    font-weight: 700 !important;
+    font-style: italic !important;
+    font-size: 12px !important;
+    letter-spacing: 0.5px !important;
+    padding: 6px 10px !important;
+    min-height: 32px !important;
+    width: 100% !important;
+    white-space: nowrap !important;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.25) !important;
+    text-transform: uppercase;
+}
+.st-key-welcome_login button:hover,
+.st-key-welcome_signup button:hover {
+    background: var(--maroon-2) !important;
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.3) !important;
+}
+
+
+/* ---- Native Streamlit inputs/metrics: newspaper form style ---- */
 .stApp input,
 .stApp textarea,
 .stApp div[data-testid="stTextInput"] input,
@@ -932,33 +1337,190 @@ div[data-testid="stButton"] button[kind="primary"]:hover {
     color: #1a1a1a !important;
     -webkit-text-fill-color: #1a1a1a !important;
     caret-color: #1a1a1a !important;
-    font-size: 18px !important;
-    border: 1px solid rgba(0,0,0,0.15) !important;
-    border-radius: 6px !important;
+    font-size: 17px !important;
+    font-family: 'Lora', serif !important;
+    border: 1.5px solid var(--ink) !important;
+    border-radius: 0px !important;
 }
-.stApp input::placeholder, .stApp textarea::placeholder { color: #888 !important; font-size: 18px !important; }
-.stApp input::selection, .stApp textarea::selection { background: #9b7fff !important; color: #ffffff !important; }
-.stApp div[data-testid="stMetricValue"] { color: #ffffff !important; }
-.stApp div[data-testid="stMetricLabel"] { color: #cfc4e8 !important; }
-.stApp div[data-testid="stDataFrame"] { border-radius: 8px; overflow: hidden; }
-.stApp code { color: #ec4bce !important; background: rgba(255,255,255,0.08) !important; }
-/* ---- New: file uploader readable on dark background ---- */
+.stApp input::placeholder, .stApp textarea::placeholder { color: #888 !important; font-size: 16px !important; font-style: italic; }
+.stApp input::selection, .stApp textarea::selection { background: var(--maroon) !important; color: #ffffff !important; }
+.stApp div[data-testid="stMetricValue"] { color: var(--ink) !important; font-family: 'Playfair Display', serif !important; }
+.stApp div[data-testid="stMetricLabel"] { color: var(--sepia) !important; text-transform: uppercase; letter-spacing: 0.5px; }
+.stApp div[data-testid="stDataFrame"] { border-radius: 0px; overflow: hidden; border: 1.5px solid var(--ink); }
+.stApp code { color: var(--maroon) !important; background: rgba(0,0,0,0.06) !important; }
+/* ---- File uploader: newspaper form style ---- */
 .stApp div[data-testid="stFileUploader"] section {
     background-color: #ffffff !important;
-    border-radius: 8px !important;
-    border: 1.5px dashed rgba(0,0,0,0.2) !important;
+    border-radius: 0px !important;
+    border: 1.5px dashed var(--ink) !important;
 }
 .stApp div[data-testid="stFileUploader"] section span,
 .stApp div[data-testid="stFileUploader"] section small,
 .stApp div[data-testid="stFileUploader"] section div {
     color: #333 !important;
 }
+
+/* Headings solid black bold across all card types */
+.stApp div[data-testid="stMarkdownContainer"] .card h3,
+.stApp div[data-testid="stMarkdownContainer"] .flat-card h3,
+.stApp div[data-testid="stMarkdownContainer"] .step-card h3,
+.stApp div[data-testid="stMarkdownContainer"] .flow-step h3,
+.stApp .card h3,
+.stApp .flat-card h3,
+.stApp .step-card h3,
+.stApp .flow-step h3 {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    font-weight: 800 !important;
+    text-shadow: none !important;
+    opacity: 1 !important;
+}
+
+/* "Learn More →" links under module cards */
+div[class*="st-key-btn_"] button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--maroon) !important;
+    -webkit-text-fill-color: var(--maroon) !important;
+    font-family: 'Lora', serif !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    font-style: italic;
+    text-decoration: none !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    padding: 6px 4px !important;
+    letter-spacing: 0 !important;
+    text-transform: none;
+}
+div[class*="st-key-btn_"] button p,
+div[class*="st-key-btn_"] button span,
+div[class*="st-key-btn_"] button div {
+    color: inherit !important;
+    -webkit-text-fill-color: inherit !important;
+}
+div[class*="st-key-btn_"] button:hover {
+    background: transparent !important;
+    color: var(--maroon-2) !important;
+    -webkit-text-fill-color: var(--maroon-2) !important;
+    text-decoration: underline !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+div[class*="st-key-btn_"] button:active { transform: none !important; }
+
+/* ---- Live News section: newspaper clipping cards ----
+   Fixed height on every zone (image / title / footer / link) so every
+   card in the grid ends up exactly the same total height regardless of
+   headline length — this is what keeps the 4-column grid aligned with
+   no overlap, instead of relying on Streamlit to equalize row heights
+   (which it doesn't do across separate st.columns()). */
+.news-card {
+    background: #ffffff;
+    border: 1.5px solid var(--ink);
+    border-radius: 0px;
+    padding: 0;
+    margin-bottom: 22px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    height: 340px;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.news-card:hover {
+    transform: translate(-3px, -3px);
+    box-shadow: 6px 6px 0 rgba(122,20,20,0.3);
+}
+.news-card-img {
+    width: 100%;
+    height: 140px;
+    flex-shrink: 0;
+    background-size: cover;
+    background-position: center;
+    background-color: #ece6d8;
+    background-repeat: no-repeat;
+    border-bottom: 1.5px solid var(--ink);
+    filter: grayscale(15%);
+}
+.news-card-noimg {
+    width: 100%;
+    height: 140px;
+    flex-shrink: 0;
+    border-bottom: 1.5px solid var(--ink);
+    background: repeating-linear-gradient(45deg, #ece6d8, #ece6d8 8px, #e2dac8 8px, #e2dac8 16px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #777;
+    font-family: 'Lora', serif;
+    font-style: italic;
+    font-size: 13px;
+}
+.news-card-body {
+    padding: 10px 14px 0 14px;
+    flex-grow: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+.news-card-title {
+    font-family: 'Playfair Display', serif;
+    font-weight: 800;
+    font-size: 15px;
+    line-height: 1.3;
+    color: var(--ink);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.news-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-shrink: 0;
+    padding: 8px 14px 0 14px;
+    border-top: 1px solid #999;
+    margin: 8px 14px 0 14px;
+    padding-left: 0;
+    padding-right: 0;
+}
+.news-card-source {
+    font-family: 'Lora', serif;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: var(--sepia);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 60%;
+}
+.news-card-date {
+    font-family: 'Lora', serif;
+    font-style: italic;
+    font-size: 10px;
+    color: #777;
+    white-space: nowrap;
+}
+.news-card-link {
+    font-family: 'Lora', serif;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--maroon) !important;
+    flex-shrink: 0;
+    padding: 8px 14px 12px 14px;
+    text-decoration: none !important;
+}
+.news-card-link:hover { text-decoration: underline !important; }
 </style>
 """, unsafe_allow_html=True)
 
 
 def render_login():
-    st.button("← Back to Home", on_click=go_to, args=("home",))
+    back_target = "home" if st.session_state.logged_in else "welcome"
+    st.button("← Back", on_click=go_to, args=(back_target,))
     st.markdown('<div class="section-title">Login</div><div class="section-line"></div>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 1.2, 1])
@@ -978,10 +1540,9 @@ def render_login():
         if st.button("Go to Signup", use_container_width=True):
             go_to("signup")
             st.rerun()
-
-
 def render_signup():
-    st.button("← Back to Home", on_click=go_to, args=("home",))
+    back_target = "home" if st.session_state.logged_in else "welcome"
+    st.button("← Back", on_click=go_to, args=(back_target,))
     st.markdown('<div class="section-title">Sign Up</div><div class="section-line"></div>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 1.2, 1])
@@ -1012,37 +1573,95 @@ def render_signup():
 
 
 def render_navbar():
-    nav_l, nav_r = st.columns([4, 2.2] if st.session_state.logged_in else [4, 1.4])
+    st.markdown(
+        f'<div style="text-align:center; font-family:\'Lora\',serif; font-style:italic; '
+        f'font-size:13px; color:#6b5b3e; letter-spacing:1px; margin-bottom:2px;">'
+        f'{datetime.now().strftime("%A, %d %B %Y").upper()}</div>',
+        unsafe_allow_html=True,
+    )
+    nav_l, nav_r = st.columns([4, 2.2] if st.session_state.logged_in else [5.2, 0.8], gap="small")
     with nav_l:
         st.markdown('<div class="navbar-brand">📰 PURE PRESS <span>Daily Intelligence</span></div>', unsafe_allow_html=True)
     with nav_r:
         if st.session_state.logged_in:
-            b1, b2, b3 = st.columns([1.3, 1, 1])
+            b1, b2, b3 = st.columns([2.2, 1, 1], gap="small")
             with b1:
-                st.markdown(f'<div class="nav-user">👋 {st.session_state.username}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="nav-user"> 👋 {st.session_state.username}</div>', unsafe_allow_html=True)
             with b2:
-                if st.button("📊 History", key="nav_history", use_container_width=True):
+                if st.button("📊 History", key="nav_history"):
                     go_to("history")
                     st.rerun()
             with b3:
-                if st.button("Logout", key="nav_logout", use_container_width=True):
+                if st.button("Logout", key="nav_logout"):
                     st.session_state.logged_in = False
                     st.session_state.username = ""
                     st.rerun()
         else:
-            b1, b2 = st.columns(2)
+            b1, b2 = st.columns([1, 1], gap="small")
             with b1:
-                if st.button("Login", key="nav_login", use_container_width=True):
+                if st.button("Login", key="nav_login"):
                     go_to("login")
                     st.rerun()
             with b2:
-                if st.button("Sign Up Free", key="nav_signup", use_container_width=True):
+                if st.button("Sign Up Free", key="nav_signup"):
                     go_to("signup")
                     st.rerun()
     st.markdown('<div class="navbar-divider"></div>', unsafe_allow_html=True)
 
 
-# ---------------- Carousel builder (real Bootstrap carousel, runs in isolated iframe so JS works) ----------------
+# =====================================================================
+# NEW: Public gate page — shown instead of the full dashboard whenever
+# the visitor isn't logged in. Keeps branding + key stats visible, but
+# hides all modules/features behind Login / Sign Up, per requirement:
+# "site direct-a ellarkkum kaataadha, login/signup pannadha apram than
+#  modules kaanum".
+# =====================================================================
+
+def render_welcome():
+    st.markdown("""
+    <div class="hero-wrap">
+        <div class="hero-title">Smart News Trust Analysis</div>
+        <div class="hero-sub">AI-powered credibility scoring, bias detection, and trust scoring for the modern reader</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    stat_cols = st.columns(4)
+    stats = [
+        ("99.96%", "Fake News Accuracy"),
+        ("5", "AI Models Trained"),
+        ("44K+", "Training Articles"),
+        ("4", "Languages Supported"),
+    ]
+    for i, (num, label) in enumerate(stats):
+        with stat_cols[i]:
+            st.markdown(f"""
+            <div class="stat-box shadow rounded-4">
+                <div class="stat-num">{num}</div>
+                <div class="stat-label">{label}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="cta-banner">
+        <h2>Join Pure Press to Get Started</h2>
+        <p>Log in or create a free account to unlock Fake News Detection, Bias Detection, Clickbait Detection, Source Credibility and more</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    cta_cols = st.columns([7, 1.4, 1.4, 7], gap="small")
+    with cta_cols[1]:
+        if st.button("🔐 Login", key="welcome_login", use_container_width=True):
+            go_to("login")
+            st.rerun()
+    with cta_cols[2]:
+        if st.button("✨ Sign Up Free", key="welcome_signup", use_container_width=True):
+            go_to("signup")
+            st.rerun()
+
+    render_live_news_section()
+
+
+
 def render_highlight_carousel():
     """Big carousel shown ABOVE 'Discover Our Features' - 3 modules per slide, linear-gradient card backgrounds."""
     per_slide = 3
@@ -1078,7 +1697,7 @@ def render_highlight_carousel():
     html_code = f"""
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Lora:ital@0;1&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=Lora:ital@0;1&display=swap');
         html, body {{
             margin: 0; padding: 0 14px;
             background: transparent;
@@ -1086,8 +1705,9 @@ def render_highlight_carousel():
         }}
         .hl-col {{ padding-left: 14px; padding-right: 14px; margin-bottom: 12px; }}
         .hl-card {{
-            border-radius: 16px;
-            border: 2.5px solid;
+            background: #ffffff !important;
+            border-radius: 0px;
+            border: 2px solid #1a1a1a !important;
             padding: 30px 18px;
             text-align: center;
             min-height: 250px;
@@ -1095,49 +1715,54 @@ def render_highlight_carousel():
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 10px 26px rgba(0,0,0,0.4);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 5px 5px 0 rgba(0,0,0,0.18);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }}
         .hl-card:hover {{
-            transform: translateY(-8px) scale(1.02);
-            box-shadow: 0 18px 36px rgba(0,0,0,0.5);
+            transform: translate(-4px, -4px);
+            box-shadow: 8px 8px 0 rgba(122,20,20,0.35);
         }}
-        .hl-icon {{ font-size: 44px; margin-bottom: 10px; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4)); }}
+        .hl-icon {{ font-size: 40px; margin-bottom: 10px; }}
         .hl-card h2 {{
             font-family: 'Playfair Display', serif;
             font-weight: 800;
-            font-style: italic;
-            font-size: 22px;
+            font-style: normal;
+            font-size: 21px;
             margin: 0 0 8px 0;
-            color: #ffffff;
+            color: #1a1a1a;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }}
         .hl-card p {{
-            font-size: 15px;
-            color: #e8e0f8;
+            font-size: 14px;
+            font-style: italic;
+            color: #444;
             margin: 0 0 14px 0;
         }}
         .hl-badge {{
             display: inline-block;
             padding: 4px 14px;
-            border-radius: 20px;
-            border: 1.5px solid;
-            font-size: 13px;
+            border-radius: 0px;
+            border: 1.5px solid #1a1a1a !important;
+            font-size: 12px;
             font-weight: 700;
             font-family: 'Lora', serif;
-            background: rgba(255,255,255,0.12);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: #f4f1ea;
+            color: #7a1414 !important;
         }}
         #highlightCarousel {{ padding-bottom: 14px; }}
         .carousel-control-prev, .carousel-control-next {{ width: 6%; }}
         .carousel-control-prev-icon, .carousel-control-next-icon {{
-            background-color: rgba(255,255,255,0.9);
+            background-color: #1a1a1a;
             border-radius: 50%;
             padding: 16px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-            filter: invert(1);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }}
         .carousel-indicators {{ margin-bottom: -8px; }}
         .carousel-indicators [data-bs-target] {{
-            background-color: #b39dff;
+            background-color: #7a1414;
             width: 9px; height: 9px;
             border-radius: 50%;
         }}
@@ -1189,12 +1814,12 @@ def render_testimonials_carousel():
             margin: 0 auto;
             text-align: center;
             padding: 30px 20px;
-            background: linear-gradient(135deg, #ffffff 0%, #f3eefc 100%);
-            border-radius: 14px;
-            border: 1px solid rgba(0,0,0,0.06);
-            box-shadow: 0 8px 22px rgba(0,0,0,0.20);
+            background: #ffffff;
+            border-radius: 0px;
+            border: 1.5px solid #1a1a1a;
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.15);
         }}
-        .t-emoji {{ font-size: 30px; margin-bottom: 10px; }}
+        .t-emoji {{ font-size: 28px; margin-bottom: 10px; }}
         .t-quote {{
             font-family: 'Lora', serif;
             font-style: italic;
@@ -1208,16 +1833,20 @@ def render_testimonials_carousel():
             font-size: 16px;
             color: #1a1a1a;
             margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }}
         .t-name span {{
             font-family: 'Lora', serif;
             font-weight: 400;
             font-style: italic;
-            color: #6d28d9;
+            color: #7a1414;
             font-size: 14px;
+            text-transform: none;
+            letter-spacing: 0;
         }}
         .carousel-indicators [data-bs-target] {{
-            background-color: #b39dff;
+            background-color: #7a1414;
             width: 8px; height: 8px;
             border-radius: 50%;
         }}
@@ -1245,7 +1874,7 @@ def render_home():
     stats = [
         ("99.96%", "Fake News Accuracy"),
         ("5", "AI Models Trained"),
-        ("140K+", "Training Articles"),
+        ("40K+", "Training Articles"),
         ("4", "Languages Supported"),
     ]
     for i, (num, label) in enumerate(stats):
@@ -1256,6 +1885,9 @@ def render_home():
                 <div class="stat-label">{label}</div>
             </div>
             """, unsafe_allow_html=True)
+
+       # ---- NEW: Live categorized news feed, right at the top of the home page ----
+    render_live_news_section()
 
     # ---- Section 0 (NEW): Big auto-sliding highlight carousel, ABOVE Discover Our Features ----
     st.markdown('<div class="section-title">Platform Highlights</div><div class="section-line"></div>', unsafe_allow_html=True)
@@ -1273,7 +1905,7 @@ def render_home():
             st.markdown(f"""
             <div class="card shadow-lg rounded-3 border-0" style="--tilt:{tilt}; --bgcolor:{bg}; height:250px; margin-top:{20 if i%2==0 else 0}px;">
                 <div class="icon">{mod['icon']}</div>
-                <h3 style="color:#1a1a1a !important; font-weight:800 !important; font-size:24px !important;">{mod['title']}</h3>
+                <h3 style="color:#000000 !important; font-weight:800 !important; font-size:24px !important;">{mod['title']}</h3>
                 <p>{mod['desc']}</p>
             </div>
             """, unsafe_allow_html=True)
@@ -1284,19 +1916,17 @@ def render_home():
     cols = st.columns(4)
     for i, mod in enumerate(MODULES):
         with cols[i % 4]:
-            badge_class = {"active": "badge-active", "basic": "badge-basic", "coming_soon": "badge-soon"}[mod["status"]]
+            badge_class = {"active": "status-badge-active", "basic": "status-badge-basic", "coming_soon": "status-badge-soon"}[mod["status"]]
             badge_text = {"active": "Active", "basic": "Basic", "coming_soon": "Coming Soon"}[mod["status"]]
-            bs_badge = {"active": "badge rounded-pill bg-dark", "basic": "badge rounded-pill bg-warning text-dark", "coming_soon": "badge rounded-pill bg-light text-secondary border"}[mod["status"]]
-            bg = CARD_BG[i % len(CARD_BG)]
             border_color = CARD_BORDER[i % len(CARD_BORDER)]
             st.markdown(f"""
-            <div class="card shadow-lg border-0 rounded-4 flat-card" style="--flatbg:{bg}; --flatborder:{border_color};">
-                <div class="flat-card-bar" style="background:linear-gradient(90deg, {border_color}, {bg});"></div>
+            <div class="card shadow-lg border-0 rounded-4 flat-card" style="--flatbg:#ffffff; --flatborder:{border_color};">
+                <div class="flat-card-bar" style="background:{border_color};"></div>
                 <div class="card-body" style="padding:14px 16px;">
                     <div class="icon" style="font-size:26px;">{mod['icon']}</div>
-                    <h3 class="card-title" style="text-align:left; color:#1a1a1a !important; font-weight:800 !important; font-size:24px !important;">{mod['title']}</h3>
+                    <h3 class="card-title" style="text-align:left; color:#000000 !important; font-weight:800 !important; font-size:24px !important;">{mod['title']}</h3>
                     <p class="card-text" style="text-align:left;">{mod['desc']}</p>
-                    <div style="margin-top:6px;"><span class="{bs_badge}">{badge_text}</span></div>
+                    <div style="margin-top:6px;"><span class="status-badge {badge_class}">{badge_text}</span></div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -1311,7 +1941,7 @@ def render_home():
     <div class="flow-step">
         <div class="flow-num">1</div>
         <div>
-            <h3 style="color:#1a1a1a !important; font-weight:800 !important; font-size:24px !important;">Submit Article</h3>
+            <h3 style="color:#000000 !important; font-weight:800 !important; font-size:24px !important;">Submit Article</h3>
             <p>User pastes text, or uploads a PDF / image (screenshot, photo of print) of a news headline and article</p>
         </div>
     </div>
@@ -1322,7 +1952,7 @@ def render_home():
     <div class="flow-step">
         <div class="flow-num">2</div>
         <div>
-            <h3 style="color:#1a1a1a !important; font-weight:800 !important; font-size:24px !important;">9 AI Modules Analyze in Parallel</h3>
+            <h3 style="color:#000000 !important; font-weight:800 !important; font-size:24px !important;">9 AI Modules Analyze in Parallel</h3>
             <p>Every module independently scores the article</p>
         </div>
     </div>
@@ -1344,7 +1974,7 @@ def render_home():
     <div class="flow-step highlight-step">
         <div class="flow-num">3</div>
         <div>
-            <h3 style="color:#1a1a1a !important; font-weight:800 !important; font-size:24px !important;">Trust Score Engine</h3>
+            <h3 style="color:#000000 !important; font-weight:800 !important; font-size:24px !important;">Trust Score Engine</h3>
             <p>Combines Fake News + Bias + Clickbait + Source + Verification results into one weighted 0–100 score</p>
         </div>
     </div>
@@ -1355,7 +1985,7 @@ def render_home():
     <div class="flow-step">
         <div class="flow-num">4</div>
         <div>
-            <h3 style="color:#1a1a1a !important; font-weight:800 !important; font-size:24px !important;">Get Your Report</h3>
+            <h3 style="color:#000000 !important; font-weight:800 !important; font-size:24px !important;">Get Your Report</h3>
             <p>Trust Score, Risk Level, and plain-language Explainable AI reasons — all on one dashboard</p>
         </div>
     </div>
@@ -1382,7 +2012,7 @@ def render_home():
 def render_module_header(mod):
     st.button("← Back to Home", on_click=go_to, args=("home",))
     st.markdown(f"""
-    <h1 style="font-family:'Playfair Display', serif; color:#ffffff;">{mod['icon']} {mod['title']}</h1>
+    <h1 style="font-family:'Playfair Display', serif; color:#000000;">{mod['icon']} {mod['title']}</h1>
     <p style="font-family:'Lora', serif; font-style:italic; color:#cbbfe6; font-size:17px;">{mod['detail']}</p>
     <hr style="border-color:rgba(255,255,255,0.25);">
     """, unsafe_allow_html=True)
@@ -1606,17 +2236,89 @@ def render_history_page():
     st.metric("Average Trust Score (all your checks)", f"{avg_score:.1f}/100")
 
 
+def render_multilingual(mod, models):
+    render_module_header(mod)
+
+    tokenizer, model = models.get("multilingual", (None, None))
+
+    if tokenizer is None or model is None:
+        st.warning(
+            "The multilingual model hasn't been trained yet. Run "
+            "`step4_train_multilingual.py` first, which saves the trained "
+            "model to `models/multilingual_bert_model/` — then reload this page."
+        )
+        return
+
+    st.write("Paste Tamil or Malayalam text to check it for offensive language / misinformation signals.")
+
+    text_input = st.text_area(
+        "Text (Tamil / Malayalam)",
+        height=180,
+        placeholder="இங்கே தமிழ் அல்லது மலையாள உரையை ஒட்டவும்...",
+        key="multilingual_text",
+    )
+
+    if st.button("Analyze Text", type="primary", key="multilingual_check_btn"):
+        if not text_input.strip():
+            st.warning("Please paste some text first.")
+        else:
+            with st.spinner("Analyzing..."):
+                detected_lang = detect_dravidian_language(text_input)
+                result = predict_multilingual(text_input, tokenizer, model)
+
+            st.markdown("---")
+            st.write(f"**Detected language:** `{detected_lang}`")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Trust Score", f"{result['trust_score']}/100")
+            with col2:
+                color = "red" if result["prediction"] == "Offensive / Suspicious" else "green"
+                st.markdown(f"### :{color}[{result['prediction']}]")
+            st.progress(result["trust_score"] / 100)
+
+            st.markdown("### 💡 Why this result?")
+            if result["prediction"] == "Offensive / Suspicious":
+                st.write(
+                    "- The model detected language patterns commonly associated with "
+                    "offensive, inflammatory, or misleading content in Tamil/Malayalam text."
+                )
+            else:
+                st.write("- No strong offensive-language or misinformation signals were detected.")
+
+            if st.session_state.logged_in:
+                save_history(
+                    st.session_state.username, mod["title"],
+                    text_input[:80], result["trust_score"],
+                    "High Risk" if result["prediction"] == "Offensive / Suspicious" else "Low Risk",
+                )
+
+
 def render_placeholder(mod):
     render_module_header(mod)
     st.info("This module is coming soon and will be added as the project progresses.")
 
-
 MODULE_MAP = {m["id"]: m for m in MODULES}
+
+# Pages that require the visitor to be logged in. Anything not in this
+# set (currently just "login" and "signup") stays public.
+PROTECTED_PAGES = {
+    "home", "fake_news", "bias", "clickbait", "explainable",
+    "propagation", "source_cred", "history",
+    "cross_verify", "multilingual", "realtime",
+}
+
 page = st.session_state.page
+
+if not st.session_state.logged_in and page in PROTECTED_PAGES:
+    page = "welcome"
+    st.session_state.page = "welcome"
 
 render_navbar()
 
-if page == "home":
+if page == "welcome":
+    render_welcome()
+elif page == "home":
     render_home()
 elif page == "login":
     render_login()
@@ -1630,5 +2332,9 @@ elif page == "source_cred":
     render_source_credibility(MODULE_MAP[page])
 elif page == "history":
     render_history_page()
-elif page in ["cross_verify", "multilingual", "realtime"]:
+elif page == "multilingual":
+    with st.spinner("Loading AI models..."):
+        _models = load_models()
+    render_multilingual(MODULE_MAP[page], _models)
+elif page in ["cross_verify", "realtime"]:
     render_placeholder(MODULE_MAP[page])
