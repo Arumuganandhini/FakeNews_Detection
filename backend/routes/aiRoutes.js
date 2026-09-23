@@ -285,6 +285,16 @@ router.post('/analyze-content', async (req, res) => {
     if (err.code === 'OCR_UNAVAILABLE' || err.code === 'OCR_FAILED') {
       return res.status(503).json({ error: err.message });
     }
+    // A link we cannot parse is a bad request; a site that refuses automated
+    // reading is a condition upstream of us. Reporting either as 500 says the
+    // server broke, which is both untrue and unhelpful to whoever is reading
+    // the logs.
+    if (err.code === 'BAD_URL') {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.code === 'FETCH_BLOCKED') {
+      return res.status(422).json({ error: err.message, canRetryWith: ['text', 'screenshot'] });
+    }
     console.error('Content analysis failed:', err.message);
     res.status(500).json({ error: err.message || 'Failed to analyse that content.' });
   }

@@ -21,7 +21,11 @@ const assertPublicUrl = async (rawUrl) => {
   try {
     parsed = new URL(rawUrl);
   } catch (_) {
-    throw new Error('That does not look like a valid link.');
+    const badUrl = new Error('That does not look like a valid link.');
+    // The caller maps this to 400: a malformed link is the request's problem,
+    // not a fault on our side, and a 500 tells monitoring the wrong story.
+    badUrl.code = 'BAD_URL';
+    throw badUrl;
   }
 
   if (!['http:', 'https:'].includes(parsed.protocol)) {

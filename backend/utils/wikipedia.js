@@ -1,6 +1,22 @@
 const axios = require('axios');
 
 /**
+ * Raised when the reference work could not be reached.
+ *
+ * An empty result and an unreachable index are both "no articles" to an HTTP
+ * client, and the caller reports the first as a finding about the article:
+ * "No reference entry was found for the names in this article." Said about an
+ * outage, that is a claim we did not establish.
+ */
+class ReferenceUnavailableError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ReferenceUnavailableError';
+    this.referenceUnavailable = true;
+  }
+}
+
+/**
  * Fetches Wikipedia content based on a search query
  * @param {string} query - The search query
  * @param {number} limit - Maximum number of articles to return
@@ -47,7 +63,10 @@ async function fetchWikipediaContent(query, limit = 3) {
     return articles;
   } catch (error) {
     console.error('Error fetching Wikipedia content:', error.message);
-    return [];
+    // A search that ran and matched nothing returns [] above. Reaching here
+    // means the lookup did not happen, which the caller has to be able to
+    // tell apart from a subject the reference work does not cover.
+    throw new ReferenceUnavailableError(error.message);
   }
 }
 
@@ -62,4 +81,4 @@ function extractKeywords(text) {
   return words.filter(word => word.length > 3);
 }
 
-module.exports = { fetchWikipediaContent, extractKeywords }; 
+module.exports = { fetchWikipediaContent, extractKeywords, ReferenceUnavailableError }; 

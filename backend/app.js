@@ -22,8 +22,20 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
+//
+// The deployed frontend is served from its own origin, and the browser sends
+// that origin on every API call. With only localhost on this list, a deployed
+// build is refused by its own backend and every request fails CORS — which is
+// what happened, because four frontend files fall back to the Render API URL
+// while nothing here ever allowed the Render page to call it. The list is
+// configurable so a new deployment does not need a code change.
 const allowedOrigins = [
   'http://localhost:3000',
+  'https://news-curator-deployed.onrender.com',
+  ...String(process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean)
 ];
 app.use(cors({
   origin: function (origin, callback) {

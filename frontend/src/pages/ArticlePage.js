@@ -82,6 +82,10 @@ const ArticlePage = () => {
   // reader watches the report being built instead of waiting on a spinner.
   const [completedChecks, setCompletedChecks] = useState([]);
   const [articleFeedbacks, setArticleFeedbacks] = useState([]);
+  // A list that failed to load is not an empty list. Without this the page
+  // tells the reader "no feedbacks yet" whenever the request fails, which is
+  // a claim about other readers built out of our own error.
+  const [feedbacksFailed, setFeedbacksFailed] = useState(false);
   const [loadingStates, setLoadingStates] = useState({
     summary: true,
     detailedSummary: false,
@@ -273,8 +277,10 @@ const ArticlePage = () => {
     try {
       const response = await axios.get(`${BASE_URL}/api/article-feedback/all/${encodeURIComponent(article.url)}`);
       setArticleFeedbacks(response.data.data || []);
+      setFeedbacksFailed(false);
     } catch (error) {
       console.error('Error fetching article feedbacks:', error);
+      setFeedbacksFailed(true);
     } finally {
       setLoadingStates(prev => ({ ...prev, articleFeedbacks: false }));
     }
@@ -341,6 +347,10 @@ const ArticlePage = () => {
       );
     }
 
+    if (feedbacksFailed) {
+      return <p className="no-feedbacks">We could not load what other readers said. Try again in a moment.</p>;
+    }
+
     if (articleFeedbacks.length === 0) {
       return <p className="no-feedbacks">No feedbacks yet. Be the first to share your thoughts!</p>;
     }
@@ -350,7 +360,8 @@ const ArticlePage = () => {
         {articleFeedbacks.map((feedback) => (
           <div key={feedback._id} className="feedback-item">
             <div className="feedback-header">
-              <span className="feedback-user">{feedback.userId?.email || 'Anonymous User'}</span>
+              {/* A display name, never the address someone signed up with. */}
+              <span className="feedback-user">{feedback.userId?.name || 'A reader'}</span>
               <span className="feedback-date">
                 {new Date(feedback.createdAt).toLocaleDateString()}
               </span>

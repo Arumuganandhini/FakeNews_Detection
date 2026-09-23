@@ -156,9 +156,21 @@ async function evalOne(item, cfg, hideSource) {
   }
 
   // A factor that failed (network / parse error) must abort the article so it
-  // is retried on resume — recording its neutral fallback would pollute results.
+  // is retried on resume — recording its fallback would pollute results.
+  //
+  // This checked `result.failed`, which none of the four content agents ever
+  // sets: on a model error they return the pattern-matcher's score tagged
+  // `degraded: true`. So the guard never fired, and every rules-path
+  // observation went into the corpus the likelihood ratios are estimated from,
+  // labelled as though the model had produced it. The ratios in
+  // data/evidenceWeights.json were measured on that mixture and the proportion
+  // is unknown, because nothing recorded which channel each record came from.
+  // Both are fixed here: the guard tests the flag that exists, and the channel
+  // is written to the record either way so the question is answerable next time.
   const requireOk = (result, factor) => {
-    if (result.failed) throw new Error(`${factor} factor failed — will retry on resume`);
+    if (result.failed || result.degraded) {
+      throw new Error(`${factor} factor fell back to the pattern check — will retry on resume`);
+    }
     return result;
   };
 
@@ -177,6 +189,11 @@ async function evalOne(item, cfg, hideSource) {
   if (cfg.transparency) jobs.push(['transparency', assessTransparency(title, text)]);
 
   const settled = await Promise.all(jobs.map(([, p]) => p));
+  const degraded = [];
+  settled.forEach((result, i) => {
+    const name = jobs[i][0];
+    if (result.degraded || result.failed) degraded.push(name);
+  });
   settled.forEach((result, i) => {
     const name = jobs[i][0];
     scores[name] = requireOk(result, name).score;
@@ -200,7 +217,7 @@ async function evalOne(item, cfg, hideSource) {
     transparency: 'transparency' in scores,
     verification: 'verification' in scores
   };
-  return { score: aggregate(scores, enabled), factors: scores };
+  return { score: aggregate(scores, enabled), factors: scores, degraded };
 }
 
 async function main() {
@@ -229,7 +246,8 @@ async function main() {
       const result = await evalOne(item, CONFIGS[opts.config], opts.hideSource);
       fs.appendFileSync(outFile, JSON.stringify({
         id: item.id, label: item.label, score: result.score,
-        factors: result.factors, ms: Date.now() - started,
+        factors: result.factors, degraded: result.degraded || [],
+        ms: Date.now() - started,
         title: item.title.slice(0, 120)
       }) + '\n');
       processed++;

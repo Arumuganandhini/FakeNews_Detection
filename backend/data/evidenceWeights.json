@@ -429,5 +429,10 @@
         "n": 386
       }
     ]
+  },
+  "corpus": {
+    "unknownChannel": 1642,
+    "droppedForDegraded": 0,
+    "note": "Every record here predates the recording of the measurement channel. An unknown fraction of these factor scores came from the pattern-matching fallback rather than the model, because the guard meant to exclude them tested a flag the agents never set. Re-estimate from a clean run before citing these ratios as measured on the model path."
   }
 }

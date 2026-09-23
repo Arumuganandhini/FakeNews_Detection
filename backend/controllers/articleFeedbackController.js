@@ -118,10 +118,16 @@ exports.getAllArticleFeedbacks = async (req, res) => {
   try {
     const { articleId } = req.params;
 
-    // Find all feedback entries for the article, sorted by creation date
+    // This route is deliberately public - anyone reading an article can see
+    // what other readers said about it - so what it returns has to be safe to
+    // hand to a stranger. It used to populate the reviewer's EMAIL, which the
+    // page then printed beside the review: every reader's address readable by
+    // anyone who knew an article URL, no sign-in required. The display name is
+    // what the page actually needs.
     const feedbacks = await ArticleFeedback.find({ articleId })
       .sort({ createdAt: -1 })
-      .populate('userId', 'email')
+      .populate('userId', 'name')
+      .select('-__v')
       .lean();
 
     if (!feedbacks || feedbacks.length === 0) {

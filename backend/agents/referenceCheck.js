@@ -135,13 +135,31 @@ const checkPremises = async (title, content) => {
 
   try {
     const lookups = await Promise.all(entities.map(async (entity) => {
-      const articles = await fetchWikipediaContent(entity, 1).catch(() => []);
+      // A lookup that could not run is marked, not silently emptied: the
+      // reference work having no entry for someone is a fact about the
+      // reference work, while being unable to ask it is a fact about us.
+      let articles;
+      try {
+        articles = await fetchWikipediaContent(entity, 1);
+      } catch (err) {
+        return { entity, lookupFailed: true };
+      }
       if (!articles.length || !articles[0].content) return null;
       return { entity, reference: articles[0] };
     }));
 
-    const found = lookups.filter(Boolean);
+    const found = lookups.filter(l => l && l.reference);
     if (found.length === 0) {
+      // Every lookup failing means the reference work was unreachable, not
+      // that none of these names has an entry.
+      if (lookups.every(l => l && l.lookupFailed)) {
+        return {
+          status: 'error',
+          checked: [],
+          contradictions: [],
+          explanation: 'The reference work could not be reached, so the article’s premises were not tested.'
+        };
+      }
       return { status: 'not-found', checked: [], contradictions: [], explanation: 'No reference entry was found for the names in this article.' };
     }
 

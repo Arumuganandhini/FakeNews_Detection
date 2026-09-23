@@ -86,6 +86,8 @@ const loadRecords = (inputPath) => {
           .map(file => path.join(dir, file)));
 
   const records = [];
+  let dropped = 0;
+  let unknownChannel = 0;
   const sources = [];
   for (const file of roots) {
     const lines = fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean);
@@ -100,6 +102,21 @@ const loadRecords = (inputPath) => {
           const factors = { ...row.factors };
           delete factors.baseline;
           if (Object.keys(factors).length === 0) continue;
+
+          // A factor that fell back to the pattern matcher is a different
+          // measurement from the one these ratios describe, so it is dropped
+          // rather than pooled. Records written before runEval recorded the
+          // channel carry no `degraded` field at all: those are kept, and
+          // counted separately, because an unknown channel is not the same as
+          // a known-bad one - but it is not a clean one either, and the count
+          // is reported so the corpus can be read honestly.
+          const degraded = Array.isArray(row.degraded) ? row.degraded : null;
+          if (degraded) {
+            for (const name of degraded) delete factors[name];
+            if (Object.keys(factors).length === 0) { dropped++; continue; }
+          } else {
+            unknownChannel++;
+          }
           records.push({ label: row.label, factors, id: row.id, file: path.basename(file) });
           kept++;
         }
@@ -107,7 +124,15 @@ const loadRecords = (inputPath) => {
     }
     if (kept) sources.push({ file: path.relative(__dirname, file), records: kept });
   }
-  return { records, sources };
+  if (unknownChannel) {
+    console.warn(
+      `${unknownChannel} of ${records.length} records predate channel recording: ` +
+      'it is not known whether their factors came from the model or the pattern matcher.'
+    );
+  }
+  if (dropped) console.warn(`${dropped} records dropped: every factor had fallen back to the pattern check.`);
+
+  return { records, sources, corpus: { unknownChannel, droppedForDegraded: dropped } };
 };
 
 /**
@@ -440,7 +465,7 @@ const DECLARED_DEFAULTS = {
 };
 
 const main = () => {
-  const { records, sources } = loadRecords(argValue('--input', null));
+  const { records, sources, corpus } = loadRecords(argValue('--input', null));
   if (records.length === 0) {
     console.error('No labelled records found. Run eval/runEval.js first.');
     process.exit(1);
@@ -469,6 +494,10 @@ const main = () => {
     binCount: BIN_COUNT,
     labelConvention: '0 = fabricated, 1 = genuine',
     totalRecords: records.length,
+    // How much of the corpus is known to have come from the model path. A
+    // record with `unknownChannel` predates the recording of that channel and
+    // may carry pattern-matcher scores pooled in with model ones.
+    corpus,
     sources,
     families: {
       style: {
