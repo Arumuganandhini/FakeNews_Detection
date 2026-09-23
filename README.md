@@ -2,38 +2,75 @@
 
 ## 📖 Project Overview
 
-The rapid growth of digital media has made it difficult for users to identify trustworthy news. Fake news, biased reporting, and clickbait content spread faster than ever before.
+Most fake-news detectors answer one question — "Fake or Real?" — with no reasons and no evidence. The obvious improvement is to score the article on many signals instead of one. We built that, and then found the flaw in it.
 
-Most fake news detectors only answer one question — "Fake or Real?" — with no reasons, no evidence, and no measure of confidence.
+**Scoring how an article is written measures the wrong thing.** The calm tone, the plain headline, the named sources, the absence of clickbait — all of it is controlled by whoever wrote the text. A fabricated story composed in ordinary newsroom style scores *well*, and inventing a quote from a named professor actually raises its score. We measured this on our own pipeline: invented articles averaged **7.3/10**, and four of six deceptive items were shown to the reader as credible.
 
-This project goes further. It analyzes every news article from **six independent angles** and produces an **explainable trust score** that users can actually inspect and understand.
+Worse, the old design made this systematic. When no other outlet could be found reporting a story, the cross-source check withdrew and handed its weight to the remaining checks — so the *absence of corroboration increased* the influence of exactly the signals a fabricator controls.
+
+The mistake underneath it is treating this as ordinary classification. In ordinary classification the features come from nature. Here **the adversary writes the features**, and that changes what a feature is worth:
+
+> **An observation the author controls can incriminate an article, but can never exonerate it.**
+>
+> A crude headline is evidence of fabrication — genuine outlets rarely write that way. A polished headline is *not* evidence of genuineness, because a competent fabricator simply writes a polished headline. Any corpus of crude fakes teaches the opposite, and doesn't contain the counter-examples that would correct it.
+
+So the scoring was rebuilt from scratch. Every observation now contributes a **likelihood ratio measured from labelled data** — not a weight somebody picked — and the output is **P(fake news)**, a probability that means something outside our own code.
+
+| | Old | New |
+|---|---|---|
+| Weights | `0.15·source + 0.10·headline + …`, chosen by hand | Likelihood ratios estimated from 1,642 labelled articles |
+| Output | 6.4 / 10 — a number with no referent | P(fake) = 0.21 — checkable against outcomes |
+| Combining | Weighted mean (compensatory) | Additive log-odds in decibans (auditable, they sum) |
+| Uninformative check | Still contributed its weight | Ratio = 1 → contributes exactly 0 |
+| Unmeasured check | Got an invented weight | Contributes 0, and is named in the report |
+
+Alongside the probability, a deterministic rule set issues a **verdict** — Corroborated, Likely true, Unverified, Commentary, Satire, Likely false, False — with the rule that fired and the grounds. An article nobody else reports cannot be called trustworthy however well it is written.
 
 ---
 
 ## 🎯 Problem Statement
 
-Existing fake news detection systems have several limitations:
+Existing systems have several limitations:
 
-* They only classify news as Fake or Real.
-* They do not explain **why** an article is untrustworthy.
-* They do not check the reliability of the news source.
-* They do not detect biased or emotionally manipulative language.
-* They do not verify claims against other news outlets.
-* Their confidence scores are often dishonest — a system may say "90% sure" while being right only 60% of the time.
-
-As a result, users still struggle to judge whether a news article can truly be trusted.
+* They only classify news as Fake or Real, with no reasons and no evidence.
+* They do not check whether anyone independent reports the same thing.
+* When they do check, they **count articles instead of sources** — eight papers running one Reuters wire look like eight confirmations.
+* They have no defined behaviour when a check finds nothing, so "we could not verify this" and "this passed" look identical.
+* Their confidence scores are often dishonest — a system may say "90% sure" while being right 60% of the time.
+* They assume English, and they assume the input is an article rather than a video, a screenshot or a forwarded message.
 
 ---
 
 ## 🚀 Our Solution
 
-Instead of one black-box prediction, every article passes through **six parallel checkers**:
+### The evidence ledger
+
+Every analysis shows its arithmetic. Decibans add up, so you can check the total by hand — which is the entire reason for using them instead of a blended score nobody can reproduce.
+
+```
+Before reading the article        -7.53 db   unrated publisher
+clickbait        (scored 9.0)         0 db   ← author-controlled: cannot count in its favour
+bias             (scored 9.0)         0 db   ← author-controlled
+persuasion       (scored 9.5)         0 db   ← author-controlled
+transparency                          0 db   ← no likelihood ratio measured yet
+Independent corroboration         +1.66 db   nothing found — weak evidence only
+                                 ─────────
+Total                             -5.87 db   →  P(fake news) = 21%
+```
+
+The same article, with two independent outlets corroborating it, comes out at **0.6%**. Identical prose, identical publisher — a **110× swing**, driven entirely by evidence. That is the design working.
+
+Three properties fall out of the arithmetic rather than from special cases in the code:
+
+- **An uninformative check contributes exactly nothing.** A likelihood ratio of 1 is 0 decibans. Abstention stopped being a code path and became arithmetic.
+- **An unmeasured check contributes nothing** — and is named in the report. Transparency has only 18 labelled examples, so it currently scores 0 db and says so, instead of the invented 0.18 weight it used to carry.
+- **The four content checks are 1.2 factors, not four.** Measured correlation r = 0.78. The old design counted one piece of evidence four times; their summed weight is now scaled accordingly.
 
 ### 🏛️ 1. Source Reputation
 
-Checks the news outlet against a curated database of ~120 rated sources.
+Checks the outlet against a curated database of 90 rated sources.
 
-Reliable outlets raise the trust score. Unknown or low-rated outlets lower it.
+For social content there is a second rule: an account is not a publisher. A known newsroom's own channel inherits that newsroom's record; an anonymous account does **not** inherit the neutral 5/10 that an unrated newspaper gets, because there is no masthead, correction policy or accountability behind it.
 
 ### 📰 2. Headline Quality (Clickbait Detection)
 
@@ -67,15 +104,38 @@ Goes beyond "this is biased" to name **which rhetorical technique** is being use
 
 Follows the propaganda-technique literature (SemEval-2020 Task 11): loaded language, appeal to fear, name calling, false dilemma, whataboutism, bandwagon, thought-terminating clichés and more — each with the effect it has on the reader.
 
-### 🔄 6. Cross-Source Verification
+### 🔄 6. Cross-Source Verification — counted in *sources*, not articles
 
-* Extracts the article's main factual claims
-* Searches what **other independent news outlets** reported
-* Compares the claims against that real coverage
+Extracts the article's factual claims, searches what other outlets reported, and judges stance over that retrieved coverage only. Then comes the part most systems skip.
 
-If other outlets confirm the claims → trust increases.
-If they contradict the claims → trust decreases and the user is alerted.
-If no coverage exists → the system honestly reports **"unverified"** instead of guessing.
+**Eight articles are usually not eight confirmations.** Before anything is counted, retrieved coverage is collapsed by three deterministic rules:
+
+| Rule | Example |
+|---|---|
+| Common ownership | Vox and The Verge → one source. Wired and Ars Technica → one source. NBC and Sky → one source. |
+| Agency syndication | Five papers carrying `NEW DELHI (Reuters) –` → one source |
+| Near-duplicate headline | Unattributed reprints, matched at 75% token overlap → one source |
+| Same state apparatus | RT and Sputnik → one source |
+
+Every merge is shown to the reader with its reason. The ownership model is in [`backend/data/ownership.json`](backend/data/ownership.json) — 70 media groups, hand-curated. **No API supplies this; it is the project's own.**
+
+**The model is also not allowed to decide relevance.** It will happily cite coverage that has nothing to do with the claim — on our adversarial set an invented "secret chemical leak" was reported as *supported* by real articles about an unrelated evacuation. Evidence must now share an **anchor** with the claim (a place, name or number), checked deterministically after the model has spoken. Evidence that fails is discarded and the claim falls back to unverified.
+
+### ⚖️ The verdict
+
+Nine ordered rules over the evidence produce one of seven verdicts. Each states the rule that fired, the grounds, and a confidence derived only from how much independent evidence exists:
+
+| Verdict | When | Score ceiling |
+|---|---|---|
+| **False** | ≥2 independent sources contradict it | 2.0 |
+| **Likely false** | 1 independent contradiction, **or** an uncorroborated high-impact claim with several warning signs | 3.5 |
+| **Satire** | The publisher is a satirical outlet | 4.0 |
+| **Unverified** | Checkable claims, nothing found either way | 4.9 |
+| **Commentary** | No checkable factual claim — it is argument, not reporting | 6.4 |
+| **Likely true** | 1 independent source confirms | 8.0 |
+| **Corroborated** | ≥2 independent sources confirm | 10 |
+
+One necessary exception, written into the rules: an exclusive from an outlet rated 8.5+ relaxes the unverified ceiling to 6.4. A Reuters scoop nobody has matched yet is not the same object as an anonymous blog's claim — though neither is confirmed.
 
 ## 🔎 A note on professional fact-check matching
 
@@ -103,29 +163,96 @@ was correctly rejected rather than matched. To switch it back on: obtain a Fact
 Check Tools key, set `FACTCHECK_API_KEY`, then re-add the import, a weight and the
 factor entry in `trustAnalysisAgent.js`.
 
-## 🤖 Explainable Trust Score
+## 🌍 Any language
 
-The six results combine into one trust score through a **transparent weighted formula** — not another AI guess. The user sees the full breakdown:
+Language is identified **locally** — by script and function-word frequency, no model call and no network — across 15 languages and 9 scripts, including Tamil, Hindi, Telugu, Malayalam, Kannada, Bengali, Urdu, Arabic, Chinese, Japanese, Korean and Russian.
 
-* Overall score dial with a verdict (Trustworthy / Exercise Caution / Low Credibility)
-* Individual bars for each of the six factors, with its weight in the score
-* The highlighted biased sentences
-* The verified/contradicted claims with evidence links
+Two things follow:
 
-The score is also **calibrated**: when the system says 70% trust, it is actually right about 70% of the time.
+1. **Analysis happens in the article's own language**, and flagged sentences are quoted back untranslated — otherwise the highlight would point at a sentence the article does not contain.
+2. **Claims are searched in the original language *and* in English.** This is what makes verification work outside English at all: an English-only search finds nothing for a Tamil report and concludes, wrongly, that nobody else covers the story. A Tamil claim confirmed by an English outlet is genuinely independent evidence — arguably more so than a same-language reprint.
+
+## 📱 Any input, not just articles
+
+A reader rarely meets a claim as a news article. `POST /api/ai/analyze-content` takes:
+
+| Input | How it is read |
+|---|---|
+| **YouTube link** | Transcript, via YouTube's own player endpoint — no API key. Picks the caption track in the language actually *spoken*, not one of the machine translations |
+| **Screenshot** | OCR (Tamil, Hindi, Telugu, Kannada, Malayalam, Bengali, Gujarati, Punjabi, Urdu, Arabic, English) |
+| **Pasted text** | A forwarded WhatsApp message, a caption |
+| **Any article link** | The existing article reader |
+
+Instagram and Facebook serve nothing useful to an unauthenticated client. Rather than ship a scraper that works on the demo machine and nowhere else, those return a clear instruction to paste the text or upload a screenshot — and the screenshot path is implemented.
+
+## 🤖 What the score means
+
+* The **verdict** is the headline answer, with its grounds and the rule that produced it
+* A **presentation score** shown separately, so you can see how well it reads versus what supports it
+* Per-factor bars, the highlighted sentences, the claims with evidence links
+* Every merge in the independence count, with its reason
+
+The score is also **calibrated**: when the system says 70% trust, it is right about 70% of the time.
 
 ---
 
 ## 📊 Tested Results
 
-Tested on 300 articles from the standard **ISOT fake news dataset** (150 fake, 150 real), with source identity hidden so the benchmark's known Reuters label-leak cannot help:
+### Against the rule it replaces
+
+Likelihood ratios estimated on a training half, every figure from the held-out half (n = 829 ISOT articles):
+
+| | Accuracy | ROC-AUC | ECE when accusing | Precision when accusing |
+|---|---|---|---|---|
+| Legacy hand-weighted sum | 0.888 | 0.970 | 0.229 | 0.848 |
+| **Weight of evidence (shipped)** | **0.954** | 0.957 | **0.127** | **0.975** |
+
+Isotonic calibration takes the content model from **ECE 0.335 → 0.056**.
+
+**The cost, stated plainly.** Turning the one-sided rule off raises AUC from 0.957 to 0.978 — and that gain is a trap. It comes from learning that polished prose indicates a genuine article, which is true on a corpus of crude fakes and false against a competent one. Both numbers are reported (`--no-clamp`); we ship the clamp.
+
+It also costs calibration on the *exonerating* side, which is why overall ECE is 0.285 in the shipped configuration: the system refuses to become confident that a well-written article is genuine. Every residual error points toward **more** suspicion — it never overstates confidence in an article's favour.
+
+### The adversarial benchmark — the one that matters
+
+ISOT cannot test the defect described at the top of this file. Its fake articles are mostly *badly written*, so anything that scores style performs well on it while staying wide open to a competent fabrication. So we wrote the hard case: invented articles in plain newsroom register, with named sources, no clickbait and no persuasion techniques.
+
+Each item is scored twice from **identical factor outputs** — once under the old additive rule with abstention redistribution, once under the current rule:
+
+| Measure | Old rule | Current |
+|---|---|---|
+| Deceptive items presented as credible (≥5.5) | 4 / 6 | **0 / 6** |
+| Verdict matched expectation | — | **6 / 6** |
+| Genuine articles wrongly condemned | — | **0 / 2** |
+| Mean *presentation* score of the fabrications | **7.3 / 10** | unchanged — that is the point |
+
+That last row is the finding. The fabrications still read as trustworthy and always will. What changed is that reading well no longer decides the answer.
+
+```bash
+node eval/estimateWeights.js             # measure the likelihood ratios from labelled data
+node eval/validateScoring.js             # held-out comparison against the old rule
+node eval/validateScoring.js --no-clamp  # the adversarial-asymmetry ablation
+node eval/adversarialBench.js --no-model # well-written fabrications, deterministic path
+```
+
+### The older ISOT result
+
+On 300 ISOT articles with source identity hidden so the benchmark's Reuters label-leak cannot help:
 
 | Approach | Accuracy |
 |----------|----------|
 | Asking the AI model directly (single prompt) | 82.0% |
-| **Our multi-factor pipeline (same AI model)** | **94.7%** |
+| Multi-factor pipeline (same model) | **94.7%** |
 
-Removing any single checker lowers the accuracy — proof that every module contributes. The full testing framework is in [`backend/eval/`](backend/eval/) and every result is reproducible from a fixed seed.
+> These figures come from a four-factor configuration on a model the provider has since withdrawn. They are kept as the measurement that motivated the architecture, not as a claim about today's build. A re-run is outstanding.
+
+### The tests
+
+```bash
+npm test     # 103 tests, no API keys required
+```
+
+The whole suite, the weight estimation, the held-out validation and both benchmarks run with **every key removed**. That is deliberate: it makes "the contribution is not the API" a checkable claim rather than a sentence in a report.
 
 ### Analysis latency
 
@@ -209,7 +336,41 @@ So the gateway is provider-agnostic. One line in `backend/.env` decides the orde
 LLM_PROVIDER=gemini,nim   # Gemini leads, NIM catches its failures
 LLM_PROVIDER=nim          # NVIDIA NIM only (the code default)
 LLM_PROVIDER=nim,gemini   # NIM leads, Gemini catches its failures
+LLM_PROVIDER=ollama       # a model on this machine — no key, no quota, no vendor
 ```
+
+### Running with no third-party model at all
+
+Both hosted providers have already failed this project: a model was withdrawn
+mid-development and every analysis started returning HTTP 410, and the free tiers
+rate-limit under ordinary demo load. Neither was a defect in the pipeline and
+neither was fixable from inside it.
+
+Ollama removes the dependency — a model served over plain HTTP from this machine,
+with no key, no quota, and no vendor able to retire anything:
+
+```bash
+# once
+ollama pull llama3.1:8b
+
+# in backend/.env
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=llama3.1:8b
+LLM_PROVIDER=ollama
+```
+
+Nothing else changes. No agent knows which provider answered — that is what the
+gateway is for. The provider is opt-in: without `OLLAMA_HOST` set it reports
+itself unconfigured and is left out of the chain, so a machine not running Ollama
+never waits on a connection that cannot succeed.
+
+**What the model is still needed for, and what it is not.** Every decision in the
+system — independence counting, the verdict rules, the likelihood ratios, the
+calibration, the input gate, language detection — is deterministic local code and
+calls no model at all. The model is confined to reading: extracting claims,
+judging whether retrieved coverage supports them, and scoring the four writing
+checks. Each of those has a deterministic fallback, so the pipeline degrades
+rather than stopping when no model is reachable.
 
 The first *configured* provider leads; the rest are automatic failover. A
 provider with no API key is skipped rather than failing the request, so an
@@ -270,13 +431,19 @@ built so that none of those silently corrupts a trust report.
   fairness, persuasion technique and transparency — fall back to deterministic
   word-pattern and lexicon analysis. These catch less than the model does and
   the report says so, both on the summary and on each affected factor.
-* **A check has no evidence to weigh** (no other coverage, no published
-  fact-check) → the factor **stands down**: its weight is redistributed across
-  the checks that did produce signal, and the reader is told exactly why.
+* **No corroborating coverage found** → the verdict becomes **Unverified** and
+  the score is **capped at 4.9**. Its weight is *not* handed to the other checks.
+  That redistribution was the original defect: it meant an absence of evidence
+  increased the influence of the signals a fabricator controls.
+* **The verification check could not run at all** (no model, no news quota) →
+  also **Unverified**, with the reason stated. An unrun check must never be
+  mistaken for "there was nothing to check" — that misreading would reclassify
+  every article as commentary, which carries a far higher ceiling.
 
 The one thing the system never does is invent a neutral score for a check that
-did not run. On a total outage a fabricated article still scores **2.3/10 —
-"Be skeptical"**, and ordinary reporting still scores **9.8/10**.
+did not run. With no model at all, a fabricated article still scores **2.3/10 —
+"Be skeptical"**, and no article can be reported as trustworthy, because with the
+model unreachable nothing has been verified.
 
 ### Making the demo fast
 
@@ -307,13 +474,25 @@ than served.
 
 ## 🔮 Future Scope
 
-* 🏆 **News Literacy Levels** — users earn points for reading verified news and level up from "Reader" to "Fact Checker" to "Truth Guardian"
-* 🏅 **Reader trust dashboard** — charts of the trust level of what you read
-
-
+* 🧪 **Synthetic-media forensics** as a seventh factor. Deliberately out of scope today — it is a separate research problem, and claiming it without doing it properly would be worse than not claiming it. The architecture already admits a new factor with a weight and an abstention rule.
+* 🗂️ **Self-extending ownership model.** The 70-group media-ownership file is hand-curated. Unlisted outlets are never merged, which under-counts dependence rather than inventing independence — the safe direction, but a gap.
+* 🏅 **Reader trust dashboard** — the trust level of what you have been reading over time. Per-article verdicts are already stored; this needs only the visualisation.
 
 ---
 
-## 📌 Conclusion
+## 📌 What this project actually is
 
-This platform provides a complete solution for news verification by combining source credibility analysis, clickbait detection, bias detection, cross-source claim verification, and explainable AI into a single working system — helping users not just detect fake news, but understand **why** an article can or cannot be trusted.
+Strip away the borrowed parts — the language model, the news API — and ask what remains. That is the honest test of a project like this, and it is the one the code is arranged to pass:
+
+* the **evidence model** — likelihood ratios measured from labelled articles, accumulated as additive decibans, with author-controlled observations admitted one-sidedly
+* the **calibration** that turns a ranking into a probability you can check against outcomes
+* the **ownership and syndication model** that turns retrieved articles into independent sources
+* the **relevance gate** that stops the model citing coverage unrelated to the claim
+* the **verdict rules**, deterministic and stated, that decide what the system concludes
+* the **language identifier**, local and model-free
+
+None of that comes from an API. The language model extracts claims and judges stance over retrieved text — it is a sensor, not the judge. `npm test` proves it: 78 tests, every key removed.
+
+The single sentence version, if you only remember one thing:
+
+> **A detector facing an adversary who writes its inputs must weigh those inputs in one direction only.**
