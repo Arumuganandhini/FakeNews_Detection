@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Newspaper, Columns2, HelpCircle, LineChart, LogOut, LogIn, UserPlus
+  Newspaper, Columns2, ShieldCheck, LineChart, LogOut, LogIn, UserPlus
 } from 'lucide-react';
 import '../styles/Navbar.css';
 
@@ -15,7 +15,8 @@ const Navbar = ({ user, setUser }) => {
   useEffect(() => {
     const path = location.pathname;
     if (path === '/dashboard') setActiveLink('dashboard');
-    else if (path === '/prompt-quiz') setActiveLink('prompt-quiz');
+    else if (path === '/check') setActiveLink('check');
+    else if (path === '/compare') setActiveLink('compare');
     else if (path === '/home') setActiveLink('home');
     else if (path.includes('/home')) setActiveLink('categories');
     else setActiveLink(null);
@@ -55,18 +56,18 @@ const Navbar = ({ user, setUser }) => {
               <Newspaper size={15} /> Categories
             </Link>
             <Link
+              to="/check"
+              className={`nav-link ${activeLink === 'check' ? 'active' : ''}`}
+              onClick={() => handleLinkClick('check')}
+            >
+              <ShieldCheck size={15} /> Check anything
+            </Link>
+            <Link
               to="/compare"
               className={`nav-link ${activeLink === 'compare' ? 'active' : ''}`}
               onClick={() => handleLinkClick('compare')}
             >
               <Columns2 size={15} /> Compare
-            </Link>
-            <Link
-              to="/prompt-quiz"
-              className={`nav-link ${activeLink === 'prompt-quiz' ? 'active' : ''}`}
-              onClick={() => handleLinkClick('prompt-quiz')}
-            >
-              <HelpCircle size={15} /> Quiz
             </Link>
             <Link
               to="/dashboard"

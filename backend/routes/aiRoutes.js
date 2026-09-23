@@ -4,8 +4,6 @@ const router = express.Router();
 const summarizeArticle = require('../agents/summarizeAgent');
 const checkCredibility = require('../agents/credibilityAgent');
 const generateDetailedSummary = require('../agents/detailedSummaryAgent');
-const generateQuiz = require('../agents/quizAgent');
-const generatePromptQuiz = require('../agents/promptQuizAgent');
 const { analyzeTrust, REPORT_SCHEMA_VERSION } = require('../agents/trustAnalysisAgent');
 
 /** A cached report is only usable if it came from the current pipeline. */
@@ -13,6 +11,9 @@ const isCurrent = (report) => report && report.schemaVersion === REPORT_SCHEMA_V
 const { compareCoverage } = require('../agents/compareCoverageAgent');
 const { getSourceReputation } = require('../agents/sourceReputationAgent');
 const { extractArticle } = require('../utils/articleExtractor');
+const { ingestSocialContent } = require('../utils/socialIngest');
+const { readImageText, packForLanguage } = require('../utils/ocr');
+const { assessCheckability } = require('../agents/checkability');
 const { resolveArticleText, limitText, TEXT_BUDGET } = require('../utils/articleText');
 const TrustReportCache = require('../models/TrustReportCache');
 const SummaryCache = require('../models/SummaryCache');
@@ -183,6 +184,112 @@ router.post('/trust-analysis', async (req, res) => {
   }
 });
 
+// Analyse anything, not only a news article.
+//
+// A reader rarely meets a claim as a news article. They meet it as a YouTube
+// video somebody sent them, a screenshot of an Instagram post, or a forwarded
+// WhatsApp message with no source at all. This endpoint takes any of those,
+// normalises it into the shape the pipeline already consumes, and runs the same
+// six checks and the same verdict rules over it.
+//
+// Accepts exactly one of:
+//   { url }          - article, YouTube video, or social post
+//   { text }         - a pasted message or caption
+//   { imageBase64 }  - a screenshot, read with OCR
+// plus optional { account } and { languageHint } for the screenshot case.
+router.post('/analyze-content', async (req, res) => {
+  const { url, text, imageBase64, account, languageHint } = req.body || {};
+
+  if (!url && !text && !imageBase64) {
+    return res.status(400).json({ error: 'Send a link, some text, or a screenshot to check.' });
+  }
+
+  try {
+    let ingested = null;
+    let ocrResult = null;
+
+    if (imageBase64) {
+      const buffer = Buffer.from(String(imageBase64).replace(/^data:image\/\w+;base64,/, ''), 'base64');
+      if (buffer.length === 0) return res.status(400).json({ error: 'That image could not be decoded.' });
+      if (buffer.length > 8 * 1024 * 1024) return res.status(413).json({ error: 'That image is too large. Send one under 8 MB.' });
+
+      const packs = ['eng', packForLanguage(languageHint)].filter(Boolean);
+      ocrResult = await readImageText(buffer, [...new Set(packs)]);
+      if (!ocrResult.text || ocrResult.text.length < 40) {
+        return res.status(422).json({
+          error: 'We could not read enough text from that screenshot. Try a sharper image, or paste the text instead.',
+          readText: ocrResult.text || ''
+        });
+      }
+      ingested = await ingestSocialContent({ imageText: ocrResult.text, account });
+    } else if (!url) {
+      ingested = await ingestSocialContent({ text, account });
+    } else {
+      // A platform link is read by the social ingester; anything else is an
+      // ordinary web page and goes to the article reader.
+      ingested = await ingestSocialContent({ url, account });
+      if (!ingested) {
+        const article = await extractArticle(url);
+        ingested = {
+          title: article.title,
+          content: article.content,
+          source: article.source.name,
+          url: article.url,
+          modality: 'article',
+          provenance: null,
+          ingestNotes: []
+        };
+      }
+    }
+
+    // Before anything expensive, and before anything is claimed: can this be
+    // checked at all? Most of what people paste — "they are hiding the truth,
+    // wake up" — asserts nothing a newsroom could confirm or deny. Running the
+    // pipeline on it yields a verdict, and the verdict is meaningless. A system
+    // that answers the questions it cannot answer teaches people to distrust
+    // the answers it gets right, so this refuses instead, and says what would
+    // make the input usable.
+    const checkability = assessCheckability(ingested.content, ingested.title);
+    if (!checkability.checkable) {
+      return res.status(422).json({
+        error: checkability.reason,
+        checkable: false,
+        kind: checkability.kind,
+        missing: checkability.missing,
+        readText: ocrResult ? { chars: ocrResult.text.length, confidence: ocrResult.confidence } : null
+      });
+    }
+
+    const report = await analyzeTrust({
+      title: ingested.title,
+      content: limitText(ingested.content, TEXT_BUDGET.factors),
+      source: ingested.source,
+      url: ingested.url,
+      provenance: ingested.provenance,
+      modality: ingested.modality,
+      textCoverage: 'full'
+    });
+
+    res.json({
+      ...report,
+      ingestNotes: ingested.ingestNotes,
+      readText: ocrResult ? { chars: ocrResult.text.length, confidence: ocrResult.confidence, languages: ocrResult.languages } : null,
+      cached: false
+    });
+  } catch (err) {
+    // A platform that refuses to be read is not a server fault, and the message
+    // tells the reader exactly what to do instead.
+    if (err.code === 'PLATFORM_UNREADABLE') {
+      return res.status(422).json({ error: err.message, platform: err.platform, canRetryWith: ['text', 'screenshot'] });
+    }
+    if (err.code === 'OCR_UNAVAILABLE' || err.code === 'OCR_FAILED') {
+      return res.status(503).json({ error: err.message });
+    }
+    console.error('Content analysis failed:', err.message);
+    res.status(500).json({ error: err.message || 'Failed to analyse that content.' });
+  }
+});
+
 // The same analysis, streamed.
 //
 // A full analysis takes seconds, and the reader used to see nothing at all
@@ -314,6 +421,9 @@ router.post('/trust-badges', async (req, res) => {
           url: article.url,
           kind: 'analyzed',
           score: hit.overallScore,
+          // The one-word answer, so a caller can tally outcomes without
+          // re-deriving them from a label that is written for prose.
+          call: hit.call || null,
           verdict: hit.verdict,
           level: hit.verdictLevel,
           concernCount: (hit.concernPoints || []).length
@@ -375,44 +485,5 @@ router.post('/detailed-summary', async (req, res) => {
   }
 });
 
-router.post('/quiz', async (req, res) => {
-  try {
-    const { detailedSummary } = req.body;
-    if (!detailedSummary) {
-      return res.status(400).json({ error: 'Detailed summary is required' });
-    }
-
-    const quiz = await generateQuiz(detailedSummary);
-    res.json({ quiz });
-  } catch (error) {
-    console.error('Error generating quiz:', error);
-    res.status(500).json({ error: 'Failed to generate quiz' });
-  }
-});
-
-// Generate quiz from user prompt
-router.post('/generate-prompt-quiz', async (req, res) => {
-  try {
-    const { prompt } = req.body;
-    
-    if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
-    }
-    
-    const quizData = await generatePromptQuiz(prompt);
-    
-    // Ensure the response format is correct
-    if (!quizData || !quizData.questions || !Array.isArray(quizData.questions)) {
-      console.error('Invalid quiz data format:', quizData);
-      return res.status(500).json({ error: 'Failed to generate quiz: Invalid format' });
-    }
-    
-    // Return the quiz data directly
-    res.json(quizData);
-  } catch (error) {
-    console.error('Error generating prompt quiz:', error);
-    res.status(500).json({ error: 'Failed to generate quiz' });
-  }
-});
 
 module.exports = router;

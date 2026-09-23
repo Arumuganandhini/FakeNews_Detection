@@ -5,8 +5,82 @@ const LEVEL_COLORS = {
   'high': '#4a7c59',
   'medium-high': '#7d9a5f',
   'medium-low': '#c9862b',
-  'low': '#a63c3c'
+  'low': '#a63c3c',
+  // Verdict classes. These are the headline answer now, so each gets its own
+  // colour rather than inheriting one from the score band.
+  'corroborated': '#4a7c59',
+  'likely-true': '#7d9a5f',
+  'opinion': '#6b7280',
+  'unverified': '#8a6d3b',
+  'satire': '#6b5b95',
+  'likely-false': '#c9862b',
+  'false': '#a63c3c'
 };
+
+// Reader-facing names for the internal check ids.
+const LEDGER_NAMES = {
+  prior: 'Who published it',
+  'Before reading the article': 'Who published it',
+  clickbait: 'Headline honesty',
+  bias: 'Fairness of the language',
+  manipulation: 'Persuasion tricks',
+  transparency: 'Sources you could check',
+  sourceReputation: "The outlet's track record",
+  'Independent corroboration': 'Other outlets reporting it',
+  'style-correlation-damping': 'Overlap between the writing checks',
+  'style-weight-cap': 'Limit on how far writing alone can count',
+  calibration: 'Adjustment from past checked articles'
+};
+
+/**
+ * Say what a weight of evidence means, without the arithmetic.
+ *
+ * The model works in log-odds, which is the right thing for it to do and the
+ * wrong thing to put in front of a reader. Nobody needs the word "deciban" to
+ * understand "no effect" or "strongly suggests it is made up".
+ */
+const describeEffect = (decibans) => {
+  const size = Math.abs(decibans);
+  if (size < 0.5) return 'no effect';
+  const strength = size >= 8 ? 'strongly' : size >= 3 ? 'moderately' : 'slightly';
+  return decibans > 0
+    ? `${strength} suggests it is made up`
+    : `${strength} suggests it is genuine`;
+};
+
+const effectClass = (decibans) =>
+  Math.abs(decibans) < 0.5 ? 'neutral' : (decibans > 0 ? 'toward-fake' : 'toward-real');
+
+/**
+ * Not every line of the ledger is evidence.
+ *
+ * Three of them are bookkeeping: the starting point before anything is read,
+ * the discount for writing checks that overlap each other, and the correction
+ * that keeps the scale honest against past checked articles. They move the
+ * arithmetic, so they have to be shown - but calling a negative one "suggests
+ * it is genuine" would claim a fabricated story had something in its favour,
+ * which is exactly what the model refuses to do. They get their own words and
+ * no colour.
+ */
+const describeLedgerEntry = (entry) => {
+  const size = Math.abs(entry.decibans);
+  if (entry.step === 'prior') {
+    if (size < 0.5) return 'starts out neutral';
+    return entry.decibans > 0 ? 'starts out doubtful' : 'starts out trusted';
+  }
+  if (entry.step === 'adjustment') {
+    if (size < 0.5) return 'changed nothing';
+    return entry.decibans > 0
+      ? 'counts the writing checks for more'
+      : 'counts the writing checks for less';
+  }
+  return describeEffect(entry.decibans);
+};
+
+const ledgerEntryClass = (entry) =>
+  entry.step === 'prior' || entry.step === 'adjustment'
+    ? 'neutral'
+    : effectClass(entry.decibans);
 
 const scoreColor = (score) => {
   if (score >= 7.5) return LEVEL_COLORS['high'];
@@ -245,75 +319,209 @@ const FactorDetail = ({ factor }) => {
 const TrustReport = ({ report }) => {
   const [expanded, setExpanded] = useState(null);
   const [showWorking, setShowWorking] = useState(false);
+  // Three tiers, because most readers want the answer and nothing else. The
+  // proof is one click away for anyone who doubts it, and the writing analysis
+  // is a click beyond that — it answers a different question and should not be
+  // in the way of this one.
+  const [showProof, setShowProof] = useState(false);
+  const [showQuality, setShowQuality] = useState(false);
 
   if (!report || !report.factors) return null;
 
   const color = LEVEL_COLORS[report.verdictLevel] || scoreColor(report.overallScore);
-  const goodPoints = report.goodPoints || [];
   const concernPoints = report.concernPoints || [];
+
+  const quality = report.quality;
+  const evidence = report.evidence || {};
 
   return (
     <div className="trust-report">
-      <div className="trust-overall">
-        <div
-          className="score-circle"
-          style={{ background: `conic-gradient(${color} ${report.overallScore * 10}%, var(--paper-sunken) 0)` }}
-        >
-          <div className="score-inner">
-            <span>{report.overallScore}</span>
-            <span className="score-label">/10</span>
-          </div>
-        </div>
-        <div className="trust-verdict" style={{ color }}>
-          {report.verdict}
-        </div>
-        {report.plainSummary && (
-          <p className="trust-plain-summary">{report.plainSummary}</p>
+      {/* ── TIER 1: THE ANSWER ────────────────────────────────────────────
+          One word, and one sentence saying why. No score: showing "4.9 / 10"
+          beside a fabricated story reads as a mark for truthfulness, which is
+          the thing readers and reviewers objected to most. */}
+      <div className={`verdict-card verdict-${report.verdictLevel || 'unverified'}`}>
+        <div className="verdict-call" style={{ color }}>{report.call || report.verdict}</div>
+        {report.oneLine && <p className="verdict-oneline">{report.oneLine}</p>}
+      </div>
+
+      <div className="tier-buttons">
+        <button className="tier-toggle" onClick={() => setShowProof(!showProof)} aria-expanded={showProof}>
+          {showProof ? 'Hide the proof' : 'How do you know?'}
+        </button>
+        {quality && (
+          <button className="tier-toggle" onClick={() => setShowQuality(!showQuality)} aria-expanded={showQuality}>
+            {showQuality ? 'Hide the writing check' : 'How is it written?'}
+          </button>
         )}
       </div>
 
-      {/* The editor's note — what most readers need, in plain words. */}
-      {(concernPoints.length > 0 || goodPoints.length > 0) && (
-        <div className="trust-notes">
-          {/* The modifier sits on the section as well as the heading, so the
-              whole group can be tinted rather than just its title. */}
-          {concernPoints.length > 0 && (
-            <section className="note-group concern">
-              <h4 className="note-heading concern">Things to watch</h4>
-              <ul>{concernPoints.map((p, i) => <li key={i}>{p}</li>)}</ul>
-            </section>
+      {/* ── TIER 2: THE PROOF ─────────────────────────────────────────── */}
+      {showProof && report.decision?.grounds?.length > 0 && (
+        <section className="verdict-why">
+          <h4>What we found</h4>
+          <ul>
+            {report.decision.grounds
+              // The independent-source count is rendered on its own line below,
+              // so the ground that repeats it is dropped rather than said twice.
+              .filter(ground => !/articles? (were|was) retrieved/i.test(ground))
+              .slice(0, 3)
+              .map((ground, i) => <li key={i}>{ground}</li>)}
+          </ul>
+          {evidence.independentSupport > 0 && (
+            <p className="evidence-count">
+              Found <strong>{evidence.independentSupport}</strong>{' '}
+              {evidence.independentSupport === 1 ? 'other outlet' : 'separate outlets'} reporting the same thing
+              {evidence.articlesRetrieved > evidence.independentSupport &&
+                ` (${evidence.articlesRetrieved} articles, but the rest were the same story reprinted)`}.
+            </p>
           )}
-          {goodPoints.length > 0 && (
-            <section className="note-group good">
-              <h4 className="note-heading good">In its favour</h4>
-              <ul>{goodPoints.map((p, i) => <li key={i}>{p}</li>)}</ul>
-            </section>
-          )}
-        </div>
+        </section>
       )}
 
-      {/* A run that fell back to word-pattern matching must say so up front,
-          not bury it in the factor list. */}
-      {report.degradedNote && (
+      {/* Where it came from, when that is not obvious or not a news site. */}
+      {showProof && report.provenance && !report.provenance.knownOutletChannel && (
+        <p className="trust-provenance-note">{report.provenance.note}</p>
+      )}
+      {showProof && report.ingestNotes?.length > 0 && (
+        <ul className="trust-ingest-notes">
+          {report.ingestNotes.map((note, i) => <li key={i}>{note}</li>)}
+        </ul>
+      )}
+
+      {/* ── TIER 3: A DIFFERENT QUESTION ──────────────────────────────────
+          How well it is written. Fenced off from the verdict and behind its own
+          button, because the two are unrelated: propaganda is often well
+          written and a true local report is often scrappy, so putting this in
+          the reader's way while they are asking "is it true?" only confuses. */}
+      {showQuality && quality && (
+        <section className={`quality-card quality-${quality.level}`}>
+          <div className="quality-header">
+            <h4>How it is written</h4>
+            <span className="quality-score">{quality.score}<span className="quality-outof">/10</span></span>
+          </div>
+          <p className="quality-caveat">
+            This says nothing about whether the story is true — a well-written story
+            can still be false, and a true one can be badly written.
+          </p>
+          <ul className="quality-checks">
+            {quality.checks.map(check => (
+              <li key={check.id}>
+                <span className="quality-check-name">{check.name}</span>
+                <span className="quality-check-bar">
+                  <span style={{ width: `${check.score * 10}%`, background: scoreColor(check.score) }} />
+                </span>
+                <span className="quality-check-score">{check.score}</span>
+              </li>
+            ))}
+          </ul>
+          {concernPoints.length > 0 && (
+            <div className="quality-notes">
+              <h5>Worth noticing</h5>
+              <ul>{concernPoints.slice(0, 3).map((p, i) => <li key={i}>{p}</li>)}</ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      {showQuality && report.degradedNote && (
         <p className="trust-degraded-note">{report.degradedNote}</p>
       )}
 
-      <button
-        className="working-toggle"
-        onClick={() => setShowWorking(!showWorking)}
-        aria-expanded={showWorking}
-      >
-        {showWorking ? 'Hide our working' : 'See how we checked this'}
-      </button>
+      {(showProof || showQuality) && (
+        <button
+          className="working-toggle"
+          onClick={() => setShowWorking(!showWorking)}
+          aria-expanded={showWorking}
+        >
+          {showWorking ? 'Hide the full working' : 'Show the full working'}
+        </button>
+      )}
+
+      {/* What actually moved the answer. The underlying arithmetic is a sum of
+          log-odds, but nobody needs that word to understand "no effect" or
+          "strongly suggests made up". The numbers stay in the API for the
+          evaluation; the page says what they mean. */}
+      {showWorking && report.evidenceLedger?.length > 0 && (
+        <div className="evidence-ledger">
+          <h4>What changed our answer</h4>
+          <ul className="ledger-list">
+            {report.evidenceLedger.map((entry, i) => (
+              <li key={i} className={entry.step === 'adjustment' ? 'ledger-adjustment' : ''}>
+                <span className="ledger-label">
+                  {LEDGER_NAMES[entry.label] || entry.label}
+                  {typeof entry.observation === 'number' && (
+                    <span className="ledger-band"> — scored {entry.observation}/10</span>
+                  )}
+                </span>
+                <span className={`ledger-effect ${ledgerEntryClass(entry)}`}>
+                  {describeLedgerEntry(entry)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {typeof report.probabilityPercent === 'number' && (
+            <p className="ledger-outcome">
+              Putting that together: we estimate a <strong>{report.probabilityPercent}%</strong> chance
+              this story is made up.
+            </p>
+          )}
+          <p className="ledger-note">
+            Checks that describe the writing can only count against an article, never for it —
+            anyone can write neatly, so neat writing is not a reason to believe a story.
+            Only other outlets reporting the same thing can count in its favour.
+          </p>
+          {report.unmeasuredFactors?.length > 0 && (
+            <p className="ledger-note">
+              These ran but changed nothing, because we do not yet have enough checked examples
+              to know what they are worth: {report.unmeasuredFactors.map(u => LEDGER_NAMES[u.factor] || u.factor).join(', ')}.
+            </p>
+          )}
+          {evidence.independenceNotes?.length > 0 && (
+            <ul className="independence-notes">
+              {evidence.independenceNotes.map((note, i) => <li key={i}>{note}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
 
       {showWorking && (
       <div className="trust-factors">
         {report.factors.map((factor) => {
           // A factor that stood down contributed nothing, so it must not look
           // like a middling score that dragged the result down.
-          const counted = factor.counted !== undefined ? factor.counted : factor.weight > 0;
+          // A check no longer "counts for 18% of the score" — that was an
+          // assignment. It now reports what it actually did to the answer, in
+          // decibans, measured from labelled data.
+          const isEvidence = factor.role === 'evidence';
+          const contribution = factor.contribution;
+
+          // Whether the check RAN is a different question from whether it moved
+          // the answer. A headline check that returns 9/10 has run and found
+          // something; showing a dash because it did not shift the probability
+          // hides the finding the reader came for.
+          const ran = isEvidence
+            ? (factor.counted !== undefined ? factor.counted : true)
+            : typeof factor.score === 'number';
+          const counted = ran;
+
+          const roleText = isEvidence
+            ? (ran ? 'this check decides the verdict' : (factor.standDownReason || 'nothing found either way'))
+            // A writing check that could not run has not found "no effect" —
+            // it has found nothing, because it was not given the article.
+            : !ran
+              ? (factor.standDownReason || 'this check could not run')
+            // The publisher is not weighed as a check — it sets where the
+            // assessment starts, which is a stronger role, so calling it "no
+            // effect" here would be plainly wrong.
+            : factor.id === 'sourceReputation'
+              ? 'sets the starting point for everything below'
+              : (contribution && contribution.measured && contribution.decibans !== 0
+                  ? describeEffect(contribution.decibans)
+                  : 'no effect on the verdict');
+
           return (
-            <div key={factor.id} className={`trust-factor ${counted ? '' : 'factor-stood-down'}`}>
+            <div key={factor.id} className={`trust-factor ${counted ? '' : 'factor-stood-down'} ${isEvidence ? 'factor-evidence' : ''}`}>
               <button
                 className="factor-row"
                 onClick={() => setExpanded(expanded === factor.id ? null : factor.id)}
@@ -321,9 +529,7 @@ const TrustReport = ({ report }) => {
                 <div className="factor-info">
                   <span className="factor-name">{factor.name}</span>
                   <span className="factor-weight">
-                    {counted
-                      ? `counts for ${factor.weight}% of the score`
-                      : (factor.standDownReason || 'Not counted for this article.')}
+                    {roleText}
                     {factor.degraded && counted && ' · word-pattern check only'}
                   </span>
                 </div>
@@ -354,7 +560,9 @@ const TrustReport = ({ report }) => {
                   ) : (
                     <p className="factor-explanation stood-down-note">
                       {factor.standDownReason || factor.explanation}{' '}
-                      Its share of the score was given to the checks that did find something.
+                      {isEvidence
+                        ? 'A story no one else is reporting cannot be called confirmed, however well it is written.'
+                        : 'This check made no difference to the verdict.'}
                     </p>
                   )}
                 </div>
@@ -367,8 +575,7 @@ const TrustReport = ({ report }) => {
 
       {showWorking && (
         <p className="trust-footnote">
-          The score combines {report.factors.filter(f => (f.counted !== undefined ? f.counted : f.weight > 0)).length} of
-          these {report.factors.length} checks. Click any line to read the evidence behind it.
+          Click any line to see what that check found.
         </p>
       )}
     </div>

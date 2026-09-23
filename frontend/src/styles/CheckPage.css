@@ -1,0 +1,179 @@
+/* CheckPage — paste anything and get a verdict, or an honest refusal. */
+
+.check-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.check-header h1 {
+  font-family: var(--headline-font);
+  font-size: 2rem;
+  margin: 0 0 0.35rem;
+  color: var(--ink);
+}
+
+.check-header p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.check-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.1rem;
+  background: var(--paper-card);
+  border: 1px solid var(--rule-strong);
+}
+
+.check-modes {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.check-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.8rem;
+  font-family: var(--label-font);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--rule);
+  cursor: pointer;
+}
+
+.check-mode:hover { border-color: var(--rule-strong); }
+
+.check-mode.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.check-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--ink-muted);
+}
+
+.check-textarea,
+.check-input {
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  font-family: var(--body-font);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--ink-body);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  box-sizing: border-box;
+}
+
+.check-textarea { resize: vertical; }
+
+.check-textarea:focus,
+.check-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.check-account { font-size: 0.85rem; }
+
+.check-upload input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.check-upload-label {
+  display: block;
+  padding: 0.85rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px dashed var(--rule-strong);
+  cursor: pointer;
+}
+
+.check-upload-label:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.check-submit {
+  align-self: flex-start;
+  padding: 0.65rem 1.5rem;
+  font-family: var(--label-font);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
+.check-submit:hover:not(:disabled) { background: var(--accent-hover); }
+
+.check-submit:disabled {
+  background: var(--rule-strong);
+  cursor: not-allowed;
+}
+
+.check-error {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  color: var(--press-red);
+  background: var(--trust-low-soft);
+  border-left: 3px solid var(--press-red);
+}
+
+/* A refusal is a result, not a failure, so it is presented as one. */
+.check-refusal {
+  padding: 1.1rem 1.2rem;
+  background: var(--paper-aged);
+  border: 2px solid #8a6d3b;
+}
+
+.check-refusal h2 {
+  margin: 0 0 0.5rem;
+  font-family: var(--headline-font);
+  font-size: 1.3rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #8a6d3b;
+}
+
+.check-refusal p {
+  margin: 0 0 0.5rem;
+  line-height: 1.55;
+  color: var(--ink-body);
+}
+
+.check-missing {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.check-result {
+  padding: 1.25rem;
+  background: var(--paper-card);
+  border: 1px solid var(--rule-strong);
+}
+
+@media (max-width: 520px) {
+  .check-header h1 { font-size: 1.6rem; }
+  .check-mode { flex: 1 1 100%; justify-content: center; }
+}

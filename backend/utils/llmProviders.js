@@ -161,10 +161,79 @@ const gemini = {
 };
 
 /* -------------------------------------------------------------------------
+   Ollama — a model running on this machine, answering to nobody
+   ------------------------------------------------------------------------- */
+
+// Both providers above are somebody else's computer, and both have already
+// failed this project: a model was withdrawn mid-development and every analysis
+// began returning HTTP 410, and the free tiers rate-limit under ordinary demo
+// load. Neither failure was a defect in the pipeline, and neither was fixable
+// from inside it.
+//
+// Ollama removes the dependency. It serves a model over plain HTTP on the local
+// machine, with no key, no quota and no vendor able to retire anything. The rest
+// of the system does not notice: the gateway exists precisely so that a provider
+// is a configuration detail, and nothing above this file knows which one
+// answered.
+//
+// Opt-in on purpose. Without OLLAMA_HOST set, this provider reports itself
+// unconfigured and is left out of the chain entirely, so a machine that is not
+// running Ollama never waits on a connection that cannot succeed.
+const OLLAMA_MODELS = [
+  process.env.OLLAMA_MODEL || 'llama3.1:8b',
+  'mistral:7b',
+  'phi3:mini'
+];
+
+const ollama = {
+  name: 'ollama',
+  label: 'Ollama (local)',
+  models: [...new Set(OLLAMA_MODELS)],
+  // One request at a time. A local model is bounded by the GPU in front of it,
+  // not by a rate limit, and issuing several at once makes each of them slower
+  // without finishing the batch any sooner.
+  concurrency: Number(process.env.OLLAMA_MAX_CONCURRENT) || 1,
+  isConfigured: () => Boolean(process.env.OLLAMA_HOST),
+  missingKeyMessage:
+    'OLLAMA_HOST is not set. Install Ollama, pull a model, then set OLLAMA_HOST=http://localhost:11434 in backend/.env.',
+
+  async send({ model, prompt, maxTokens, temperature, topP, timeout }) {
+    const host = String(process.env.OLLAMA_HOST || '').replace(/\/+$/, '');
+    const response = await axios.post(
+      `${host}/api/generate`,
+      {
+        model,
+        prompt,
+        stream: false,
+        options: {
+          temperature,
+          top_p: topP,
+          // Ollama's name for the reply budget.
+          num_predict: maxTokens
+        }
+      },
+      {
+        // A local model on a laptop GPU is slower per token than a hosted one,
+        // and the caller's timeout is sized for a hosted service. Give it room
+        // rather than cancelling work that would have completed.
+        timeout: Math.max(timeout || 0, 120000),
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+
+    const text = response.data?.response;
+    if (!text || !text.trim()) {
+      throw new Error('Ollama returned an empty response.');
+    }
+    return text.trim();
+  }
+};
+
+/* -------------------------------------------------------------------------
    Selection
    ------------------------------------------------------------------------- */
 
-const PROVIDERS = { nim, gemini };
+const PROVIDERS = { nim, gemini, ollama };
 
 /**
  * Resolve the provider order for this process.

@@ -2,6 +2,7 @@
 // Factor 2: Clickbait headline detection — one structured LLM call that
 // scores the headline and names the specific clickbait signals found.
 const { callNimApiJson } = require('../utils/nvidiaNimApi');
+const { languageDirective } = require('../utils/language');
 const { clickbaitByRules } = require('./heuristics');
 
 /**
@@ -10,7 +11,7 @@ const { clickbaitByRules } = require('./heuristics');
  * @returns {Promise<{score: number, isClickbait: boolean, signals: string[], explanation: string}>}
  *          score is 0-10 where 10 = completely straightforward headline, 0 = extreme clickbait.
  */
-const analyzeClickbait = async (title) => {
+const analyzeClickbait = async (title, language) => {
   const prompt = `You are a headline analysis system. Analyze this news headline for clickbait characteristics.
 
 Headline: "${title}"
@@ -29,7 +30,7 @@ Respond with ONLY a JSON object, no other text:
   "clickbait_score": <number 0-10, where 0 = not clickbait at all and 10 = extreme clickbait>,
   "signals": [<array of short strings naming each signal actually present, empty array if none>],
   "explanation": "<one sentence explaining the assessment>"
-}`;
+}` + languageDirective(language);
 
   try {
     const result = await callNimApiJson(prompt, { maxTokens: 450 });

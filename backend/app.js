@@ -9,8 +9,6 @@ const aiRoutes = require('./routes/aiRoutes');
 const authRoutes = require('./routes/authRoutes'); // New
 const trackingRoutes = require('./routes/trackingRoutes');
 const articleHistoryRoutes = require('./routes/articleHistory');
-const quizRoutes = require('./routes/quizRoutes');
-const promptQuizRoutes = require('./routes/promptQuizRoutes');
 const userRoutes = require('./routes/userRoutes');
 const articleFeedbackRoutes = require('./routes/articleFeedbackRoutes');
 
@@ -40,7 +38,11 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(bodyParser.json());
+// A screenshot arrives as base64 inside the JSON body, and base64 inflates by
+// about a third: the 8 MB image the upload endpoint accepts is roughly 11 MB on
+// the wire. The default 100 kB limit would reject every screenshot with a
+// parser error before the route ever ran.
+app.use(bodyParser.json({ limit: '12mb' }));
 
 // Database
 connectDB().then(() => {
@@ -55,8 +57,6 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/auth', authRoutes); // New
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/article-history', articleHistoryRoutes);
-app.use('/api/quiz', quizRoutes);
-app.use('/api/prompt-quiz', promptQuizRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/article-feedback', articleFeedbackRoutes);
 

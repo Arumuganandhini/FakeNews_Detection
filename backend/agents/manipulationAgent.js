@@ -13,6 +13,7 @@
 // This is a span-level task: each detection must quote the text it applies to,
 // so the reader can see the technique in the article's own words.
 const { callNimApiJson } = require('../utils/nvidiaNimApi');
+const { languageDirective } = require('../utils/language');
 const { manipulationByRules } = require('./heuristics');
 
 const TECHNIQUES = {
@@ -41,7 +42,7 @@ const TECHNIQUE_NAMES = Object.keys(TECHNIQUES);
  * @returns {Promise<{score:number, intensity:string, techniques:Array, summary:string, failed?:boolean}>}
  *          score 0-10 where 10 = plain informative writing, 0 = heavily manipulative.
  */
-const detectManipulation = async (title, content) => {
+const detectManipulation = async (title, content, language) => {
   const text = `${title}. ${content || ''}`.slice(0, 3000);
 
   const catalogue = TECHNIQUE_NAMES
@@ -74,7 +75,7 @@ Respond with ONLY a JSON object, no other text:
     }
   ],
   "summary": "<one sentence describing how the article addresses its reader>"
-}`;
+}` + languageDirective(language);
 
   try {
     // Budget trimmed from 1400: this was the slowest factor in the pipeline at

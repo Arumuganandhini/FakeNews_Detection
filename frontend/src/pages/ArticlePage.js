@@ -331,41 +331,6 @@ const ArticlePage = () => {
     analyze('detailedSummary');
   };
 
-  // The quiz is built from the long summary. Rather than making the reader
-  // discover that, fetch it for them if it is not ready yet.
-  const handleQuizClick = async () => {
-    let summaryForQuiz = detailedSummary;
-
-    if (!summaryForQuiz) {
-      setLoadingStates(prev => ({ ...prev, detailedSummary: true }));
-      try {
-        const token = localStorage.getItem('token');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const content = article.content || article.description || article.title;
-        const response = await axios.post(
-          `${BASE_URL}/api/ai/detailed-summary`,
-          // Same cache key as the button above, so the quiz is built from the
-          // very summary the reader was shown.
-          { article: content, url: article.url, title: article.title },
-          { headers }
-        );
-        summaryForQuiz = response.data.summary;
-        setDetailedSummary(summaryForQuiz);
-        setDetailedSourceText(response.data.sourceText || null);
-      } catch (err) {
-        console.error('Could not prepare the quiz:', err);
-        setError('We could not prepare the quiz just now. Please try again.');
-        return;
-      } finally {
-        setLoadingStates(prev => ({ ...prev, detailedSummary: false }));
-      }
-    }
-
-    navigate('/quiz', {
-      state: { detailedSummary: summaryForQuiz, articleTitle: article.title, article }
-    });
-  };
-
   const renderArticleFeedbacks = () => {
     if (loadingStates.articleFeedbacks) {
       return (
@@ -504,13 +469,6 @@ const ArticlePage = () => {
                     disabled={loadingStates.detailedSummary}
                   >
                     {loadingStates.detailedSummary ? 'Setting type…' : 'Read a longer summary'}
-                  </button>
-                  <button
-                    className="action-button"
-                    onClick={handleQuizClick}
-                    disabled={loadingStates.detailedSummary}
-                  >
-                    {loadingStates.detailedSummary ? 'Preparing…' : 'Test yourself on this story'}
                   </button>
                 </div>
                 {detailedSummary && (

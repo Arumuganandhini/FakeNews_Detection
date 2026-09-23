@@ -1,42 +1,48 @@
-const { fetchContext } = require('../rag/ragPipeline');
+// backend/agents/credibilityAgent.js
+//
+// The baseline: ask the model directly, once, and take whatever it says.
+//
+// This exists to be compared against, so it has to be honestly what it claims.
+// It previously called a retrieval pipeline first — fetching Wikipedia articles
+// over the network and ranking a static local file by keyword overlap — and
+// pasted the result into the prompt. Every published comparison described it as
+// "a single holistic prompt", which it was not, and a reviewer reading this file
+// would have found a retrieval-augmented system wearing a plain baseline's name.
+//
+// The retrieval is gone. What remains is the thing the paper says it is: one
+// prompt, one answer, no evidence, no decomposition. That makes it both a
+// truthful label and a cleaner comparison — the difference measured against the
+// pipeline is now attributable to the pipeline, rather than partly to a
+// retrieval step nobody mentioned.
 const { callNimApi } = require('../utils/nvidiaNimApi');
 
 const checkCredibility = async (title, content, source) => {
-  const context = await fetchContext({ title, content, source });
-  const contextText = context.map(c => `Snippet: ${c.snippet} (Source: ${c.link})`).join('\n');
-
   const prompt = `
 You are a fact-checking assistant.
 Analyze the credibility of the following news article based on its source, language, tone, and content details.
-Use the external context from a local dataset to enhance your analysis if relevant, but provide a credibility score and reasoning even if the context doesn't match closely.
 
 Title: ${title}
 Source: ${source || 'Unknown'}
 Content: ${content}
-External Context: 
-${contextText}
 
 Respond with:
 - Credibility Score (0-10)
-- Reasoning (2-3 sentences detailing your analysis, focusing on the article itself if context is irrelevant)
+- Reasoning (2-3 sentences detailing your analysis)
   `;
 
   const text = await callNimApi(prompt);
-  //console.log('NVIDIA NIM raw response:', text); // Debug output
 
   let score = 5; // Default fallback
   let reasoning = 'No reasoning provided.';
 
-  // Robust score parsing
-  const scoreMatch = text.match(/Credibility Score\D*(\d+)/i) || 
-                    text.match(/Score\D*(\d+)/i) || 
-                    text.match(/(\d+)\s*(?:\/10)?/i); // Catch "7" or "7/10"
+  const scoreMatch = text.match(/Credibility Score\D*(\d+)/i) ||
+                    text.match(/Score\D*(\d+)/i) ||
+                    text.match(/(\d+)\s*(?:\/10)?/i);
   if (scoreMatch) {
     score = parseInt(scoreMatch[1]);
-    if (score < 0 || score > 10) score = 5; // Clamp invalid scores
+    if (score < 0 || score > 10) score = 5;
   }
 
-  // Extract reasoning (anything not containing score)
   const reasoningMatch = text.split('\n').filter(line => !line.match(/score/i)).join(' ').trim();
   if (reasoningMatch) reasoning = reasoningMatch;
 

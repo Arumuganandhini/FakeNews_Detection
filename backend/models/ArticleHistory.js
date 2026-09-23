@@ -27,14 +27,6 @@ const articleHistorySchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  quizAttempted: {
-    type: Boolean,
-    default: false
-  },
-  quizScore: {
-    type: Number,
-    default: null
-  },
   viewCount: {
     type: Number,
     default: 1

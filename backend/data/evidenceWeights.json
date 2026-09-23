@@ -1,0 +1,433 @@
+{
+  "generatedAt": "2026-09-23T02:21:22.106Z",
+  "declared": {
+    "note": "Declared parameters. Not estimated from data. Each is reported to the reader as declared, and each is measurable — see the `measurableBy` field.",
+    "priors": {
+      "strongRecord": {
+        "value": 0.02,
+        "reason": "Published by an outlet with a strong factual-reporting record, an editorial chain and a corrections policy. Fabrication is rare here and costly when discovered.",
+        "measurableBy": "a labelled audit of published corrections and retractions per outlet"
+      },
+      "ordinaryRecord": {
+        "value": 0.06,
+        "reason": "Published by a rated outlet with an ordinary record.",
+        "measurableBy": "as above"
+      },
+      "poorRecord": {
+        "value": 0.25,
+        "reason": "Published by an outlet our database rates poorly for factual reporting.",
+        "measurableBy": "as above"
+      },
+      "unratedOutlet": {
+        "value": 0.15,
+        "reason": "We hold no reliability record for this publisher. Most unrated outlets are small and legitimate, so this sits well below the rate for an anonymous account.",
+        "measurableBy": "sampling unrated outlets from the feed and labelling them"
+      },
+      "socialAccount": {
+        "value": 0.35,
+        "reason": "Posted by an account rather than a publisher: no masthead, no corrections policy, no editorial accountability.",
+        "measurableBy": "a labelled sample of social posts"
+      }
+    },
+    "corroboration": {
+      "outcomes": [
+        "contradictedByTwo",
+        "contradictedByOne",
+        "none",
+        "supportedByOne",
+        "supportedByTwoPlus"
+      ],
+      "givenGenuine": {
+        "contradictedByTwo": 0.01,
+        "contradictedByOne": 0.04,
+        "none": 0.45,
+        "supportedByOne": 0.2,
+        "supportedByTwoPlus": 0.3
+      },
+      "givenFabricated": {
+        "contradictedByTwo": 0.1,
+        "contradictedByOne": 0.2,
+        "none": 0.66,
+        "supportedByOne": 0.03,
+        "supportedByTwoPlus": 0.01
+      },
+      "basis": "declared",
+      "reason": "Note the asymmetry, which is the important part: FINDING independent corroboration is strong evidence a story is genuine, whereas NOT finding it is weak evidence it is fabricated — genuine local and niche reporting is often uncovered elsewhere, and the free news tier indexes a limited set of outlets. That asymmetry is why an uncorroborated article is capped rather than condemned.",
+      "measurableBy": "eval/measureCorroborationRates.js — live feed articles for the genuine row, the adversarial set for the fabricated row"
+    },
+    "authorControlled": {
+      "families": [
+        "style"
+      ],
+      "clampExculpatory": true,
+      "reason": "Style, headline wording, attribution and persuasion are all chosen by whoever wrote the text. Their evidence is admitted only in the incriminating direction.",
+      "measurableBy": "re-estimation on a corpus of competently written fabrications, which would show these ratios approaching 1 on the favourable side"
+    },
+    "styleWeightCap": {
+      "value": 8,
+      "reason": "Maximum decibans the style family may contribute. Even in the incriminating direction the ISOT ratios are an upper bound, since its fabrications are conspicuously crude; this caps how far one family of correlated, author-controlled signals can move the result.",
+      "measurableBy": "re-estimation on a multi-domain corpus"
+    },
+    "probabilityBounds": {
+      "min": 0.002,
+      "max": 0.98,
+      "reason": "No finite quantity of evidence of this kind justifies certainty, and a reported 0 or 1 would be a claim the system cannot support."
+    }
+  },
+  "method": "per-bin likelihood ratio, Jeffreys-smoothed, shrunk to the conservative end of a 95% interval, reported in decibans (10·log10 LR)",
+  "binCount": 5,
+  "labelConvention": "0 = fabricated, 1 = genuine",
+  "totalRecords": 1642,
+  "sources": [
+    {
+      "file": "results\\isot_content-only_seed42.jsonl",
+      "records": 18
+    },
+    {
+      "file": "results_archive_20260910_pre6factor\\isot_content-only_seed42.jsonl",
+      "records": 291
+    },
+    {
+      "file": "results_archive_20260910_pre6factor\\isot_content-v1_seed42.jsonl",
+      "records": 294
+    },
+    {
+      "file": "results_archive_20260910_pre6factor\\isot_no-manipulation_seed42.jsonl",
+      "records": 139
+    },
+    {
+      "file": "results_llama31_archive\\isot_content-only_seed42.jsonl",
+      "records": 300
+    },
+    {
+      "file": "results_llama31_archive\\isot_no-bias_seed42.jsonl",
+      "records": 300
+    },
+    {
+      "file": "results_llama31_archive\\isot_no-clickbait_seed42.jsonl",
+      "records": 300
+    }
+  ],
+  "families": {
+    "style": {
+      "factors": [
+        "bias",
+        "clickbait",
+        "manipulation",
+        "transparency"
+      ],
+      "meanCorrelation": 0.782,
+      "effectiveFactors": 1.2,
+      "damping": 0.299,
+      "pairs": [
+        {
+          "a": "bias",
+          "b": "clickbait",
+          "r": 0.858,
+          "n": 1042
+        },
+        {
+          "a": "bias",
+          "b": "manipulation",
+          "r": 0.812,
+          "n": 309
+        },
+        {
+          "a": "clickbait",
+          "b": "manipulation",
+          "r": 0.677,
+          "n": 309
+        }
+      ],
+      "note": "Members correlate, so their summed weight is scaled by `damping` to avoid counting the same evidence several times."
+    }
+  },
+  "factors": {
+    "bias": {
+      "factor": "bias",
+      "estimated": true,
+      "n": 1342,
+      "nFabricated": 659,
+      "nGenuine": 683,
+      "meanAbsoluteDecibans": 10.74,
+      "bins": [
+        {
+          "bin": 0,
+          "range": "0.0-2.0",
+          "nFabricated": 280,
+          "nGenuine": 0,
+          "likelihoodRatio": 581.354,
+          "decibansRaw": 27.64,
+          "standardError": 6.14,
+          "decibans": 15.6
+        },
+        {
+          "bin": 1,
+          "range": "2.0-4.0",
+          "nFabricated": 310,
+          "nGenuine": 17,
+          "likelihoodRatio": 18.387,
+          "decibansRaw": 12.65,
+          "standardError": 1.04,
+          "decibans": 10.61
+        },
+        {
+          "bin": 2,
+          "range": "4.0-6.0",
+          "nFabricated": 50,
+          "nGenuine": 198,
+          "likelihoodRatio": 0.264,
+          "decibansRaw": -5.79,
+          "standardError": 0.64,
+          "decibans": -4.53
+        },
+        {
+          "bin": 3,
+          "range": "6.0-8.0",
+          "nFabricated": 10,
+          "nGenuine": 142,
+          "likelihoodRatio": 0.076,
+          "decibansRaw": -11.17,
+          "standardError": 1.37,
+          "decibans": -8.49
+        },
+        {
+          "bin": 4,
+          "range": "8.0-10.0",
+          "nFabricated": 9,
+          "nGenuine": 326,
+          "likelihoodRatio": 0.03,
+          "decibansRaw": -15.21,
+          "standardError": 1.41,
+          "decibans": -12.44
+        }
+      ]
+    },
+    "clickbait": {
+      "factor": "clickbait",
+      "estimated": true,
+      "n": 1342,
+      "nFabricated": 659,
+      "nGenuine": 683,
+      "meanAbsoluteDecibans": 10.74,
+      "bins": [
+        {
+          "bin": 0,
+          "range": "0.0-2.0",
+          "nFabricated": 108,
+          "nGenuine": 0,
+          "likelihoodRatio": 224.873,
+          "decibansRaw": 23.52,
+          "standardError": 6.15,
+          "decibans": 11.46
+        },
+        {
+          "bin": 1,
+          "range": "2.0-4.0",
+          "nFabricated": 356,
+          "nGenuine": 8,
+          "likelihoodRatio": 43.463,
+          "decibansRaw": 16.38,
+          "standardError": 1.49,
+          "decibans": 13.46
+        },
+        {
+          "bin": 2,
+          "range": "4.0-6.0",
+          "nFabricated": 113,
+          "nGenuine": 4,
+          "likelihoodRatio": 26.137,
+          "decibansRaw": 14.17,
+          "standardError": 2.07,
+          "decibans": 10.11
+        },
+        {
+          "bin": 3,
+          "range": "6.0-8.0",
+          "nFabricated": 52,
+          "nGenuine": 72,
+          "likelihoodRatio": 0.75,
+          "decibansRaw": -1.25,
+          "standardError": 0.75,
+          "decibans": 0
+        },
+        {
+          "bin": 4,
+          "range": "8.0-10.0",
+          "nFabricated": 30,
+          "nGenuine": 599,
+          "likelihoodRatio": 0.053,
+          "decibansRaw": -12.78,
+          "standardError": 0.77,
+          "decibans": -11.27
+        }
+      ]
+    },
+    "manipulation": {
+      "factor": "manipulation",
+      "estimated": true,
+      "n": 309,
+      "nFabricated": 154,
+      "nGenuine": 155,
+      "meanAbsoluteDecibans": 4.88,
+      "bins": [
+        {
+          "bin": 0,
+          "range": "0.0-2.0",
+          "nFabricated": 0,
+          "nGenuine": 0,
+          "likelihoodRatio": 1.006,
+          "decibansRaw": 0.03,
+          "standardError": 8.67,
+          "decibans": 0
+        },
+        {
+          "bin": 1,
+          "range": "2.0-4.0",
+          "nFabricated": 128,
+          "nGenuine": 23,
+          "likelihoodRatio": 5.503,
+          "decibansRaw": 7.41,
+          "standardError": 0.84,
+          "decibans": 5.76
+        },
+        {
+          "bin": 2,
+          "range": "4.0-6.0",
+          "nFabricated": 8,
+          "nGenuine": 27,
+          "likelihoodRatio": 0.311,
+          "decibansRaw": -5.07,
+          "standardError": 1.63,
+          "decibans": -1.87
+        },
+        {
+          "bin": 3,
+          "range": "6.0-8.0",
+          "nFabricated": 9,
+          "nGenuine": 43,
+          "likelihoodRatio": 0.22,
+          "decibansRaw": -6.58,
+          "standardError": 1.48,
+          "decibans": -3.69
+        },
+        {
+          "bin": 4,
+          "range": "8.0-10.0",
+          "nFabricated": 9,
+          "nGenuine": 62,
+          "likelihoodRatio": 0.153,
+          "decibansRaw": -8.15,
+          "standardError": 1.43,
+          "decibans": -5.35
+        }
+      ]
+    },
+    "sourceReputation": {
+      "factor": "sourceReputation",
+      "estimated": true,
+      "n": 739,
+      "nFabricated": 361,
+      "nGenuine": 378,
+      "meanAbsoluteDecibans": 0,
+      "bins": [
+        {
+          "bin": 0,
+          "range": "0.0-2.0",
+          "nFabricated": 0,
+          "nGenuine": 0,
+          "likelihoodRatio": 1.047,
+          "decibansRaw": 0.2,
+          "standardError": 8.68,
+          "decibans": 0
+        },
+        {
+          "bin": 1,
+          "range": "2.0-4.0",
+          "nFabricated": 0,
+          "nGenuine": 0,
+          "likelihoodRatio": 1.047,
+          "decibansRaw": 0.2,
+          "standardError": 8.68,
+          "decibans": 0
+        },
+        {
+          "bin": 2,
+          "range": "4.0-6.0",
+          "nFabricated": 361,
+          "nGenuine": 378,
+          "likelihoodRatio": 1,
+          "decibansRaw": 0,
+          "standardError": 0.02,
+          "decibans": 0
+        },
+        {
+          "bin": 3,
+          "range": "6.0-8.0",
+          "nFabricated": 0,
+          "nGenuine": 0,
+          "likelihoodRatio": 1.047,
+          "decibansRaw": 0.2,
+          "standardError": 8.68,
+          "decibans": 0
+        },
+        {
+          "bin": 4,
+          "range": "8.0-10.0",
+          "nFabricated": 0,
+          "nGenuine": 0,
+          "likelihoodRatio": 1.047,
+          "decibansRaw": 0.2,
+          "standardError": 8.68,
+          "decibans": 0
+        }
+      ]
+    },
+    "transparency": {
+      "factor": "transparency",
+      "estimated": false,
+      "reason": "too few labelled examples (11 fabricated, 7 genuine) — this factor contributes no evidence until it is measured",
+      "n": 18,
+      "bins": []
+    }
+  },
+  "calibration": {
+    "method": "isotonic regression (pool-adjacent-violators) over content decibans",
+    "fittedOn": 1642,
+    "corpusBaseRate": 0.4927,
+    "note": "Maps the content-side weight of evidence to a probability. Corroboration evidence is added afterwards in log-odds space, because it is not present in the corpus this map was fitted on.",
+    "heldOutPerformance": "see eval/results/scoring-validation.json",
+    "breakpoints": [
+      {
+        "upTo": 0,
+        "probability": 0.0528,
+        "n": 785
+      },
+      {
+        "upTo": 1.722,
+        "probability": 0.18,
+        "n": 74
+      },
+      {
+        "upTo": 3.172,
+        "probability": 0.8631,
+        "n": 83
+      },
+      {
+        "upTo": 4.025,
+        "probability": 0.902,
+        "n": 147
+      },
+      {
+        "upTo": 6.195,
+        "probability": 0.9792,
+        "n": 167
+      },
+      {
+        "upTo": 8,
+        "probability": 0.9987,
+        "n": 386
+      }
+    ]
+  }
+}

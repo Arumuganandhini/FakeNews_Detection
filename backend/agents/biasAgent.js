@@ -2,6 +2,7 @@
 // Factor 3: Bias and emotional-language detection — structured LLM call that
 // flags specific sentences so the frontend can highlight them.
 const { callNimApiJson } = require('../utils/nvidiaNimApi');
+const { languageDirective } = require('../utils/language');
 const { biasByRules } = require('./heuristics');
 
 const BIAS_TYPES =['political bias', 'emotional manipulation', 'loaded language', 'one-sided reporting', 'opinion as fact', 'sensationalism'];
@@ -13,7 +14,7 @@ const BIAS_TYPES =['political bias', 'emotional manipulation', 'loaded language'
  * @returns {Promise<{score: number, biasLevel: string, politicalLean: string, flaggedSentences: Array<{sentence: string, type: string, reason: string}>, explanation: string}>}
  *          score is 0-10 where 10 = neutral/objective, 0 = heavily biased.
  */
-const analyzeBias = async (title, content) => {
+const analyzeBias = async (title, content, language) => {
   const text = `${title}. ${content || ''}`.slice(0, 3000);
 
   const prompt = `You are a media bias analysis system. Analyze this news text for bias and emotionally manipulative language.
@@ -34,7 +35,7 @@ Respond with ONLY a JSON object, no other text:
     { "sentence": "<exact quote from the text>", "type": "<one of: ${BIAS_TYPES.join(' | ')}>", "reason": "<short reason>" }
   ],
   "explanation": "<1-2 sentences summarizing the overall tone and objectivity>"
-}`;
+}` + languageDirective(language);
 
   try {
     const result = await callNimApiJson(prompt, { maxTokens: 700 });

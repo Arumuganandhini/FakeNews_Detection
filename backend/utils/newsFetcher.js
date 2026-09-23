@@ -65,6 +65,22 @@ const fetchTopNews = async (category = 'general') => {
 };
 
 /**
+ * Raised when the coverage search could not be carried out at all.
+ *
+ * The distinction this class exists to preserve: "no other outlet reports
+ * this" is a finding about the story, while "the index could not be reached"
+ * is an absence of knowledge. Collapsing the second into the first let an
+ * outage be reported to the reader as evidence about an article.
+ */
+class SearchUnavailableError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'SearchUnavailableError';
+    this.searchUnavailable = true;
+  }
+}
+
+/**
  * Search all indexed articles for coverage of a topic/claim (NewsAPI "everything" endpoint).
  * Used by cross-source verification to find how OTHER outlets report the same story.
  * @param {string} query - Search keywords
@@ -72,7 +88,7 @@ const fetchTopNews = async (category = 'general') => {
  * @param {number} [pageSize=10] - Max results
  * @returns {Promise<Array<{title: string, description: string, url: string, source: string, publishedAt: string}>>}
  */
-const searchNewsCoverage = async (query, excludeSourceName = '', pageSize = 10) => {
+const searchNewsCoverage = async (query, excludeSourceName = '', pageSize = 10, language = 'en') => {
   const apiKey = process.env.NEWS_API_KEY;
   const url = 'https://newsapi.org/v2/everything';
 
@@ -80,7 +96,7 @@ const searchNewsCoverage = async (query, excludeSourceName = '', pageSize = 10) 
     const response = await axios.get(url, {
       params: {
         q: query,
-        language: 'en',
+        language,
         sortBy: 'relevancy',
         pageSize,
         apiKey
@@ -98,8 +114,20 @@ const searchNewsCoverage = async (query, excludeSourceName = '', pageSize = 10) 
         publishedAt: a.publishedAt
       }));
   } catch (error) {
-    console.error('News coverage search failed:', error.response?.data?.message || error.message);
-    return [];
+    const status = error.response?.status;
+    const message = error.response?.data?.message || error.message;
+    console.error('News coverage search failed:', message);
+
+    // A query NewsAPI rejects as malformed is a fact about that query: the
+    // remaining, broader attempts are still worth making, and an empty result
+    // is the honest answer for this one.
+    if (status === 400) return [];
+
+    // Everything else - quota, rate limiting, an outage, a dropped connection -
+    // means the search did not happen. Returning [] here would tell the caller
+    // that no outlet covers the story, which is a finding we did not make.
+    // The caller has to be able to tell the difference.
+    throw new SearchUnavailableError(message);
   }
 };
 
@@ -114,7 +142,7 @@ const searchNewsCoverage = async (query, excludeSourceName = '', pageSize = 10) 
  * @param {number} [minOutlets=2] - Stop as soon as this many distinct outlets are found
  * @returns {Promise<{articles: Array, query: string}>} results plus the query that produced them
  */
-const searchCoverageBroadening = async (query, excludeSourceName = '', pageSize = 10, minOutlets = 2) => {
+const searchCoverageBroadening = async (query, excludeSourceName = '', pageSize = 10, minOutlets = 2, language = 'en') => {
   const terms = String(query || '').trim().split(/\s+/).filter(Boolean);
   if (terms.length === 0) return { articles: [], query: '' };
 
@@ -129,7 +157,7 @@ const searchCoverageBroadening = async (query, excludeSourceName = '', pageSize 
 
   let best = { articles: [], query: attempts[0] };
   for (const attempt of attempts) {
-    const articles = await searchNewsCoverage(attempt, excludeSourceName, pageSize);
+    const articles = await searchNewsCoverage(attempt, excludeSourceName, pageSize, language);
     const outletCount = new Set(articles.map(a => String(a.source).toLowerCase())).size;
     if (articles.length > best.articles.length) best = { articles, query: attempt };
     if (outletCount >= minOutlets) return { articles, query: attempt };
@@ -137,4 +165,4 @@ const searchCoverageBroadening = async (query, excludeSourceName = '', pageSize 
   return best;
 };
 
-module.exports = { fetchTopNews, searchNewsCoverage, searchCoverageBroadening };
+module.exports = { fetchTopNews, searchNewsCoverage, searchCoverageBroadening, SearchUnavailableError };

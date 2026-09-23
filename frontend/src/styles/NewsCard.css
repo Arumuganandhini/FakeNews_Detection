@@ -276,6 +276,9 @@
 .stamp-caution { color: var(--trust-caution); background: var(--trust-caution-soft); }
 .stamp-low { color: var(--trust-low); background: var(--trust-low-soft); }
 .stamp-unknown { color: var(--ink-muted); background: var(--paper-sunken); }
+/* Satire and opinion are neither trustworthy nor suspect — they are a different
+   kind of thing, and colouring them as either would misread them. */
+.stamp-neutral { color: var(--ink-soft); background: var(--paper-aged); }
 
 /* Reserve the stamp's space while badges load so cards do not jump */
 .trust-stamp-pending {

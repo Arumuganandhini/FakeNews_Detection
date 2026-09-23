@@ -97,10 +97,31 @@ const HomePage = () => {
 
   // Read a pasted link, then hand it to the article page so it gets exactly
   // the same treatment as anything from our own feed.
+  //
+  // A video or a social post is not an article and must not go down this path.
+  // The article reader will happily "succeed" on a YouTube link and return the
+  // 160 characters around the player — no transcript, no claims, and a verdict
+  // built on nothing. The Check page reads those properly, so they are sent
+  // there instead of being quietly mishandled here.
+  const PLATFORM_HOSTS = /(^|\.)(youtube\.com|youtu\.be|instagram\.com|twitter\.com|x\.com|facebook\.com|fb\.watch|tiktok\.com|t\.me|telegram\.me)$/i;
+
+  const isPlatformLink = (value) => {
+    try {
+      return PLATFORM_HOSTS.test(new URL(value).hostname);
+    } catch (_) {
+      return false;
+    }
+  };
+
   const handleCheckLink = async (e) => {
     e.preventDefault();
     const url = linkInput.trim();
     if (!url) return;
+
+    if (isPlatformLink(url)) {
+      navigate('/check', { state: { url } });
+      return;
+    }
 
     setCheckingLink(true);
     setLinkError('');

@@ -19,6 +19,7 @@
 // Output is a checklist rather than a single opinion, so a reader can see which
 // journalistic practice is present and which is missing.
 const { callNimApiJson } = require('../utils/nvidiaNimApi');
+const { languageDirective } = require('../utils/language');
 const { transparencyByRules } = require('./heuristics');
 
 // Each check contributes to the score. Weights reflect how strongly the
@@ -45,7 +46,7 @@ const CHECK_IDS = CHECKS.map(c => c.id);
  * @returns {Promise<{score:number, level:string, checks:Array, vagueAttributions:Array, summary:string, failed?:boolean}>}
  *          score 0-10 where 10 = fully checkable reporting.
  */
-const assessTransparency = async (title, content) => {
+const assessTransparency = async (title, content, language) => {
   const text = `${title}. ${content || ''}`.slice(0, 3000);
 
   const checklist = CHECKS
@@ -78,7 +79,7 @@ Respond with ONLY a JSON object, no other text:
   "named_examples": ["<a person or organisation the article actually names, if any>"],
   "vague_attributions": ["<exact quote of a vague attribution>"],
   "summary": "<one sentence on how checkable this reporting is>"
-}`;
+}` + languageDirective(language);
 
   try {
     const result = await callNimApiJson(prompt, { maxTokens: 900 });

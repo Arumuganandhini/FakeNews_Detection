@@ -33,3 +33,6 @@ Thumbs.db
 backend/eval/data/
 !backend/eval/data/smoke.csv
 backend/eval/results/
+# === Office lock files ===
+# Word writes ~$name.docx beside an open document and deletes it on close.
+~$*

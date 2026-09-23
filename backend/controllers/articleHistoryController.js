@@ -32,33 +32,6 @@ exports.trackArticleView = async (req, res) => {
   }
 };
 
-// Update quiz attempt
-exports.updateQuizAttempt = async (req, res) => {
-  try {
-    const { articleId, score } = req.body;
-    const userId = req.user.id;
-
-    const articleHistory = await ArticleHistory.findOneAndUpdate(
-      { userId, articleId },
-      { 
-        quizAttempted: true,
-        quizScore: score,
-        lastViewed: Date.now()
-      },
-      { new: true }
-    );
-
-    if (!articleHistory) {
-      return res.status(404).json({ success: false, error: 'Article history not found' });
-    }
-
-    res.status(200).json({ success: true, data: articleHistory });
-  } catch (error) {
-    console.error('Error updating quiz attempt:', error);
-    res.status(500).json({ success: false, error: 'Error updating quiz attempt' });
-  }
-};
-
 // Get user's article history
 exports.getUserArticleHistory = async (req, res) => {
   try {

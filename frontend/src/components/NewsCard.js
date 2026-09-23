@@ -19,10 +19,23 @@ const TrustStamp = ({ badge }) => {
     return 'low';
   };
 
+  // An article that has been checked is stamped by its VERDICT, not by a score
+  // band. "Not confirmed" and "Probably false" are different answers and must
+  // not share a colour just because their numbers were close.
+  const verdictLevel = {
+    corroborated: 'high',
+    'likely-true': 'good',
+    opinion: 'neutral',
+    unverified: 'caution',
+    satire: 'neutral',
+    'likely-false': 'low',
+    false: 'low'
+  };
+
   if (badge.kind === 'analyzed') {
     return (
       <span
-        className={`trust-stamp stamp-${level(badge.score)}`}
+        className={`trust-stamp stamp-${verdictLevel[badge.level] || level(badge.score)}`}
         title={`We checked this article: ${badge.verdict}`}
       >
         {badge.verdict}
