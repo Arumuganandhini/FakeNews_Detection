@@ -34,26 +34,34 @@ const { analyzeClickbait } = require('../agents/clickbaitAgent');
 const { analyzeBias } = require('../agents/biasAgent');
 const { verifyClaims } = require('../agents/claimVerificationAgent');
 const { detectManipulation } = require('../agents/manipulationAgent');
+const { assessTransparency } = require('../agents/transparencyAgent');
 const checkCredibility = require('../agents/credibilityAgent');
 const { WEIGHTS } = require('../agents/trustAnalysisAgent');
+const { limitText, TEXT_BUDGET } = require('../utils/articleText');
 
-const RPM = 30; // LLM requests per minute budget
+// Requests per minute. 30 was chosen for the original provider, which throttled
+// under load; the current one sustained six concurrent calls comfortably in
+// measurement, so the pacing is configurable rather than fixed. The gateway
+// still backs off on HTTP 429, so an over-optimistic value self-corrects.
+const RPM = Number(process.env.EVAL_RPM) || 30;
 const MIN_GAP_MS = Math.ceil(60000 / RPM);
 
 // Note: the fact-check factor cannot be evaluated on ISOT — those 2016-17
 // claims predate most fact-check databases and the factor needs live lookups.
 // It is measured separately in the live-news study.
 const CONFIGS = {
-  'full':           { source: true,  clickbait: true,  bias: true,  manipulation: true,  verification: false },
-  'full+verify':    { source: true,  clickbait: true,  bias: true,  manipulation: true,  verification: true },
-  'no-bias':        { source: true,  clickbait: true,  bias: false, manipulation: true,  verification: false },
-  'no-clickbait':   { source: true,  clickbait: false, bias: true,  manipulation: true,  verification: false },
-  'no-manipulation':{ source: true,  clickbait: true,  bias: true,  manipulation: false, verification: false },
-  'no-source':      { source: false, clickbait: true,  bias: true,  manipulation: true,  verification: false },
+  'full':           { source: true,  clickbait: true,  bias: true,  manipulation: true,  transparency: true,  verification: false },
+  'full+verify':    { source: true,  clickbait: true,  bias: true,  manipulation: true,  transparency: true,  verification: true },
+  'no-bias':        { source: true,  clickbait: true,  bias: false, manipulation: true,  transparency: true,  verification: false },
+  'no-clickbait':   { source: true,  clickbait: false, bias: true,  manipulation: true,  transparency: true,  verification: false },
+  'no-manipulation':{ source: true,  clickbait: true,  bias: true,  manipulation: false, transparency: true,  verification: false },
+  'no-transparency':{ source: true,  clickbait: true,  bias: true,  manipulation: true,  transparency: false, verification: false },
+  'no-source':      { source: false, clickbait: true,  bias: true,  manipulation: true,  transparency: true,  verification: false },
   // Source-blind content analysis — the headline configuration, leak-free.
-  'content-only':   { source: false, clickbait: true,  bias: true,  manipulation: true,  verification: false },
-  // The pre-upgrade content pipeline, for comparing against the new factor.
-  'content-v1':     { source: false, clickbait: true,  bias: true,  manipulation: false, verification: false },
+  'content-only':   { source: false, clickbait: true,  bias: true,  manipulation: true,  transparency: true,  verification: false },
+  // The Phase I content pipeline (clickbait + bias only), so the two factors
+  // added in Phase II can be credited separately.
+  'content-v1':     { source: false, clickbait: true,  bias: true,  manipulation: false, transparency: false, verification: false },
   'baseline':       { baseline: true }
 };
 
@@ -136,7 +144,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function evalOne(item, cfg, hideSource) {
   const title = item.title;
-  const text = stripAgencyPrefix(item.text).slice(0, 2500);
+  // Bound the text exactly as the deployed pipeline does. Evaluating on a
+  // longer excerpt than production uses would not describe the shipped system,
+  // and the current model degrades on long inputs (see paper §7.3).
+  const text = limitText(stripAgencyPrefix(item.text), TEXT_BUDGET.factors);
   const source = hideSource ? 'Unknown' : (item.source || 'Unknown');
 
   if (cfg.baseline) {
@@ -153,23 +164,41 @@ async function evalOne(item, cfg, hideSource) {
 
   const scores = {};
   if (cfg.source) scores.sourceReputation = getSourceReputation(source, null).score;
-  if (cfg.clickbait) { scores.clickbait = requireOk(await analyzeClickbait(title), 'clickbait').score; await sleep(MIN_GAP_MS); }
-  if (cfg.bias) { scores.bias = requireOk(await analyzeBias(title, text), 'bias').score; await sleep(MIN_GAP_MS); }
-  if (cfg.manipulation) { scores.manipulation = requireOk(await detectManipulation(title, text), 'manipulation').score; await sleep(MIN_GAP_MS); }
+
+  // The content factors are independent of one another and the deployed
+  // pipeline runs them concurrently, so the evaluation does too. Results are
+  // unchanged — only the wall time is — and the model gateway still caps how
+  // many calls are actually in flight. A factor that fails still rejects,
+  // aborting the article so it is retried on resume.
+  const jobs = [];
+  if (cfg.clickbait) jobs.push(['clickbait', analyzeClickbait(title)]);
+  if (cfg.bias) jobs.push(['bias', analyzeBias(title, text)]);
+  if (cfg.manipulation) jobs.push(['manipulation', detectManipulation(title, text)]);
+  if (cfg.transparency) jobs.push(['transparency', assessTransparency(title, text)]);
+
+  const settled = await Promise.all(jobs.map(([, p]) => p));
+  settled.forEach((result, i) => {
+    const name = jobs[i][0];
+    scores[name] = requireOk(result, name).score;
+  });
+
   if (cfg.verification) {
     const v = await verifyClaims(title, text, source);
     // Match production behavior: only count verification when it found evidence.
     if (['corroborated', 'contradicted'].includes(v.status)) scores.verification = v.score;
-    await sleep(MIN_GAP_MS);
   }
+
+  // One pacing gap per article rather than per call, since the calls above now
+  // overlap.
+  await sleep(MIN_GAP_MS);
 
   const enabled = {
     sourceReputation: 'sourceReputation' in scores,
     clickbait: 'clickbait' in scores,
     bias: 'bias' in scores,
     manipulation: 'manipulation' in scores,
-    verification: 'verification' in scores,
-    factCheck: false // not evaluable on a historical dataset
+    transparency: 'transparency' in scores,
+    verification: 'verification' in scores
   };
   return { score: aggregate(scores, enabled), factors: scores };
 }

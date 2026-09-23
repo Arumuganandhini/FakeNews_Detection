@@ -1,0 +1,199 @@
+const test = require('node:test');
+const assert = require('node:assert');
+const { buildEvidenceLedger, decideVerdict, applyCeiling } = require('../agents/verdictEngine');
+
+const evidence = (source, title, reliability = 8) => ({ source, title, description: '', url: `https://${source}.test/x`, reliability });
+
+const ledgerFor = (overrides = {}) => buildEvidenceLedger({
+  claims: [],
+  sourceResult: { matched: true, score: 7, type: 'newspaper' },
+  transparencyResult: { score: 7 },
+  manipulationResult: { techniques: [] },
+  title: 'Council approves new cycle lane',
+  ...overrides
+});
+
+test('two independent outlets reporting the same claim yields Corroborated', () => {
+  const ledger = ledgerFor({
+    claims: [{
+      claim: 'The council approved the cycle lane.',
+      verdict: 'supported',
+      supportingEvidence: [evidence('BBC News', 'Council approves cycle lane', 9), evidence('The Guardian', 'Cycle lane gets green light', 8.5)],
+      contradictingEvidence: []
+    }]
+  });
+  assert.strictEqual(ledger.independentSupport, 2);
+  const decision = decideVerdict(ledger);
+  assert.strictEqual(decision.verdict, 'corroborated');
+  assert.strictEqual(decision.ceiling, 10);
+});
+
+test('eight articles that are really one wire story do not corroborate', () => {
+  const wire = (source) => ({
+    source,
+    title: 'LONDON (Reuters) - Central bank holds rates steady',
+    description: '',
+    url: `https://${source}.test/x`,
+    reliability: 8
+  });
+  const ledger = ledgerFor({
+    claims: [{
+      claim: 'The central bank held rates steady.',
+      verdict: 'supported',
+      supportingEvidence: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map(wire),
+      contradictingEvidence: []
+    }]
+  });
+  assert.strictEqual(ledger.rawSupportingArticles, 8);
+  assert.strictEqual(ledger.independentSupport, 1, 'one agency story, however many reprints');
+  assert.strictEqual(decideVerdict(ledger).verdict, 'likely-true');
+});
+
+test('two independent contradictions yield False', () => {
+  const ledger = ledgerFor({
+    claims: [{
+      claim: 'The minister resigned yesterday.',
+      verdict: 'contradicted',
+      supportingEvidence: [],
+      contradictingEvidence: [evidence('Reuters', 'Minister remains in post, says office', 9.5), evidence('BBC News', 'No resignation, ministry confirms', 9)]
+    }]
+  });
+  const decision = decideVerdict(ledger);
+  assert.strictEqual(decision.verdict, 'false');
+  assert.strictEqual(decision.ceiling, 2.0);
+  assert.ok(decision.confidence >= 0.7);
+});
+
+test('a single contradiction is Likely false, not False', () => {
+  const ledger = ledgerFor({
+    claims: [{
+      claim: 'The factory has closed.',
+      verdict: 'contradicted',
+      supportingEvidence: [],
+      contradictingEvidence: [evidence('Reuters', 'Factory still operating, company says', 9.5)]
+    }]
+  });
+  assert.strictEqual(decideVerdict(ledger).verdict, 'likely-false');
+});
+
+// The defect this whole layer exists to fix.
+test('a well-written fabrication cannot score as trustworthy', () => {
+  const ledger = buildEvidenceLedger({
+    claims: [{ claim: 'A new drug cured 94% of patients in a secret trial.', verdict: 'no-coverage', supportingEvidence: [], contradictingEvidence: [] }],
+    // Everything a fabricator controls is set to its best value:
+    sourceResult: { matched: false, score: 5, type: 'unrated' },
+    transparencyResult: { score: 9 },      // invented but plausible named sources
+    manipulationResult: { techniques: [] },// calm, neutral prose
+    title: 'New drug cured 94% of patients in secret trial'
+  });
+  const decision = decideVerdict(ledger);
+  assert.ok(['unverified', 'likely-false'].includes(decision.verdict));
+
+  // Presentation score of 9.0 — the article reads beautifully.
+  const outcome = applyCeiling(9.0, decision);
+  assert.ok(outcome.score <= 4.9, `expected a capped score, got ${outcome.score}`);
+  assert.strictEqual(outcome.capped, true);
+  assert.match(outcome.ceilingReason, /presentation is not evidence/);
+});
+
+test('an uncorroborated high-impact story with several warning signs is Likely false', () => {
+  const ledger = buildEvidenceLedger({
+    claims: [{ claim: 'Millions of people were secretly evacuated after a nuclear leak.', verdict: 'no-coverage', supportingEvidence: [], contradictingEvidence: [] }],
+    sourceResult: { matched: false, score: 5, type: 'unrated' },
+    transparencyResult: { score: 2 },
+    manipulationResult: { techniques: [{ technique: 'appeal to fear' }, { technique: 'loaded language' }] },
+    title: 'Secret nuclear leak: millions evacuated overnight'
+  });
+  const decision = decideVerdict(ledger);
+  assert.strictEqual(decision.verdict, 'likely-false');
+  assert.strictEqual(decision.rule, 'uncorroborated-high-impact-with-risk-signals');
+});
+
+test('an established outlet with an exclusive is not treated as a fabrication', () => {
+  const ledger = buildEvidenceLedger({
+    claims: [{ claim: 'The regulator has opened an inquiry into the bank.', verdict: 'no-coverage', supportingEvidence: [], contradictingEvidence: [] }],
+    sourceResult: { matched: true, score: 9.5, type: 'news agency' },
+    transparencyResult: { score: 8 },
+    manipulationResult: { techniques: [] },
+    title: 'Regulator opens inquiry into bank'
+  });
+  const decision = decideVerdict(ledger);
+  assert.strictEqual(decision.verdict, 'unverified');
+  assert.strictEqual(decision.rule, 'no-independent-coverage-established-publisher');
+  assert.strictEqual(decision.ceiling, 6.4, 'a scoop is capped higher than an anonymous claim');
+});
+
+test('commentary is not judged as a false report', () => {
+  const ledger = ledgerFor({ claims: [] });
+  const decision = decideVerdict(ledger);
+  assert.strictEqual(decision.verdict, 'opinion');
+  assert.strictEqual(applyCeiling(9.5, decision).score, 6.4);
+});
+
+// Being too vague to check must not be a route to a better outcome. Commentary
+// carries the highest ceiling an uncorroborated article can reach, and writing
+// unfalsifiable assertions is the standard method of a publisher with a poor
+// record — so the two must not be confused.
+test('a poor-record publisher making unfalsifiable claims is not "commentary"', () => {
+  const ledger = ledgerFor({
+    claims: [],
+    sourceResult: { matched: true, score: 2, type: 'conspiracy' }
+  });
+  const decision = decideVerdict(ledger);
+  assert.strictEqual(decision.verdict, 'unverified');
+  assert.strictEqual(decision.rule, 'no-checkable-claims-poor-record-publisher');
+  assert.ok(decision.ceiling < 6.4, 'must not reach the commentary ceiling');
+});
+
+test('an ordinary outlet writing an opinion column still gets "commentary"', () => {
+  const ledger = ledgerFor({ claims: [], sourceResult: { matched: true, score: 8, type: 'newspaper' } });
+  assert.strictEqual(decideVerdict(ledger).verdict, 'opinion');
+});
+
+test('satire is identified from the publisher, not from its content', () => {
+  const ledger = ledgerFor({
+    sourceResult: { matched: true, score: 6, type: 'satire' },
+    claims: [{ claim: 'Congress passes bill nobody read.', verdict: 'no-coverage', supportingEvidence: [], contradictingEvidence: [] }]
+  });
+  const decision = decideVerdict(ledger);
+  assert.strictEqual(decision.verdict, 'satire');
+  assert.strictEqual(decision.rule, 'satirical-publisher');
+});
+
+test('corroboration that is entirely state media is downgraded', () => {
+  const ledger = ledgerFor({
+    claims: [{
+      claim: 'The operation was a complete success.',
+      verdict: 'supported',
+      supportingEvidence: [evidence('RT', 'Operation succeeds, ministry says', 3), evidence('Xinhua', 'Successful operation reported', 4)],
+      contradictingEvidence: []
+    }]
+  });
+  const decision = decideVerdict(ledger);
+  // Two different states are two sources, but neither has a strong record.
+  assert.ok(['corroborated', 'likely-true'].includes(decision.verdict));
+  assert.strictEqual(ledger.hasHighQualitySource, false);
+});
+
+test('the ceiling never raises a low presentation score', () => {
+  const ledger = ledgerFor({
+    claims: [{
+      claim: 'The council approved the cycle lane.',
+      verdict: 'supported',
+      supportingEvidence: [evidence('BBC News', 'Council approves cycle lane', 9), evidence('NPR', 'Cycle lane approved by council', 8.5)],
+      contradictingEvidence: []
+    }]
+  });
+  const decision = decideVerdict(ledger);
+  const outcome = applyCeiling(3.2, decision);
+  assert.strictEqual(outcome.score, 3.2, 'evidence lifts the ceiling, not the score itself');
+  assert.strictEqual(outcome.capped, false);
+});
+
+test('every verdict states the rule that produced it', () => {
+  const ledger = ledgerFor({ claims: [] });
+  const decision = decideVerdict(ledger);
+  assert.ok(decision.rule && decision.rule.length > 0);
+  assert.ok(Array.isArray(decision.grounds) && decision.grounds.length > 0);
+  assert.ok(decision.confidence > 0 && decision.confidence < 1, 'the system never claims certainty');
+});

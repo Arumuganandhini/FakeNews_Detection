@@ -1,0 +1,594 @@
+[
+  {
+    "name": "isot_content-only_seed42",
+    "n": 300,
+    "threshold": 4.5,
+    "accuracy": 0.9466666666666667,
+    "precision": 0.96,
+    "recall": 0.935064935064935,
+    "f1": 0.9473684210526316,
+    "f1Fake": 0.9459459459459458,
+    "macroF1": 0.9466571834992887,
+    "confusion": {
+      "tp": 72,
+      "tn": 70,
+      "fp": 3,
+      "fn": 5
+    },
+    "auc": 0.9869555555555556,
+    "ece": 0.2771,
+    "eceCalibrated": 0.0726,
+    "platt": {
+      "a": 16.63946798227394,
+      "b": -7.085219585544216
+    },
+    "calibrationBins": [
+      {
+        "bin": "0.0-0.1",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.1-0.2",
+        "n": 2,
+        "meanConfidence": 0.12,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.2-0.3",
+        "n": 60,
+        "meanConfidence": 0.22,
+        "observedFractionReal": 0.017
+      },
+      {
+        "bin": "0.3-0.4",
+        "n": 4,
+        "meanConfidence": 0.335,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.4-0.5",
+        "n": 27,
+        "meanConfidence": 0.457,
+        "observedFractionReal": 0.741
+      },
+      {
+        "bin": "0.5-0.6",
+        "n": 32,
+        "meanConfidence": 0.55,
+        "observedFractionReal": 0.969
+      },
+      {
+        "bin": "0.6-0.7",
+        "n": 12,
+        "meanConfidence": 0.667,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.7-0.8",
+        "n": 5,
+        "meanConfidence": 0.748,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.8-0.9",
+        "n": 7,
+        "meanConfidence": 0.8,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.9-1.0",
+        "n": 1,
+        "meanConfidence": 0.93,
+        "observedFractionReal": 1
+      }
+    ],
+    "calibrationBinsScaled": [
+      {
+        "bin": "0.0-0.1",
+        "n": 62,
+        "meanConfidence": 0.036,
+        "observedFractionReal": 0.016
+      },
+      {
+        "bin": "0.1-0.2",
+        "n": 3,
+        "meanConfidence": 0.169,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.2-0.3",
+        "n": 1,
+        "meanConfidence": 0.221,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.3-0.4",
+        "n": 6,
+        "meanConfidence": 0.394,
+        "observedFractionReal": 0.167
+      },
+      {
+        "bin": "0.4-0.5",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.5-0.6",
+        "n": 3,
+        "meanConfidence": 0.517,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.6-0.7",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.7-0.8",
+        "n": 19,
+        "meanConfidence": 0.716,
+        "observedFractionReal": 0.895
+      },
+      {
+        "bin": "0.8-0.9",
+        "n": 30,
+        "meanConfidence": 0.888,
+        "observedFractionReal": 0.967
+      },
+      {
+        "bin": "0.9-1.0",
+        "n": 26,
+        "meanConfidence": 0.987,
+        "observedFractionReal": 1
+      }
+    ]
+  },
+  {
+    "name": "isot_no-bias_seed42",
+    "n": 300,
+    "threshold": 5,
+    "accuracy": 0.9333333333333333,
+    "precision": 0.9012345679012346,
+    "recall": 0.9733333333333334,
+    "f1": 0.935897435897436,
+    "f1Fake": 0.9305555555555556,
+    "macroF1": 0.9332264957264957,
+    "confusion": {
+      "tp": 73,
+      "tn": 67,
+      "fp": 8,
+      "fn": 2
+    },
+    "auc": 0.9745111111111111,
+    "ece": 0.3394,
+    "eceCalibrated": 0.1177,
+    "platt": {
+      "a": 17.526045764103305,
+      "b": -9.043494285813637
+    },
+    "calibrationBins": [
+      {
+        "bin": "0.0-0.1",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.1-0.2",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.2-0.3",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.3-0.4",
+        "n": 52,
+        "meanConfidence": 0.389,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.4-0.5",
+        "n": 17,
+        "meanConfidence": 0.456,
+        "observedFractionReal": 0.118
+      },
+      {
+        "bin": "0.5-0.6",
+        "n": 24,
+        "meanConfidence": 0.542,
+        "observedFractionReal": 0.75
+      },
+      {
+        "bin": "0.6-0.7",
+        "n": 57,
+        "meanConfidence": 0.616,
+        "observedFractionReal": 0.965
+      },
+      {
+        "bin": "0.7-0.8",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.8-0.9",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.9-1.0",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      }
+    ],
+    "calibrationBinsScaled": [
+      {
+        "bin": "0.0-0.1",
+        "n": 52,
+        "meanConfidence": 0.098,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.1-0.2",
+        "n": 2,
+        "meanConfidence": 0.181,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.2-0.3",
+        "n": 15,
+        "meanConfidence": 0.273,
+        "observedFractionReal": 0.133
+      },
+      {
+        "bin": "0.3-0.4",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.4-0.5",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.5-0.6",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.6-0.7",
+        "n": 23,
+        "meanConfidence": 0.604,
+        "observedFractionReal": 0.739
+      },
+      {
+        "bin": "0.7-0.8",
+        "n": 1,
+        "meanConfidence": 0.754,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.8-0.9",
+        "n": 53,
+        "meanConfidence": 0.839,
+        "observedFractionReal": 0.962
+      },
+      {
+        "bin": "0.9-1.0",
+        "n": 4,
+        "meanConfidence": 0.955,
+        "observedFractionReal": 1
+      }
+    ]
+  },
+  {
+    "name": "isot_no-clickbait_seed42",
+    "n": 300,
+    "threshold": 4,
+    "accuracy": 0.9266666666666666,
+    "precision": 0.8987341772151899,
+    "recall": 0.9594594594594594,
+    "f1": 0.9281045751633986,
+    "f1Fake": 0.9251700680272109,
+    "macroF1": 0.9266373215953048,
+    "confusion": {
+      "tp": 71,
+      "tn": 68,
+      "fp": 8,
+      "fn": 3
+    },
+    "auc": 0.9338666666666666,
+    "ece": 0.3593,
+    "eceCalibrated": 0.2038,
+    "platt": {
+      "a": 15.076883659322057,
+      "b": -6.307750787954177
+    },
+    "calibrationBins": [
+      {
+        "bin": "0.0-0.1",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.1-0.2",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.2-0.3",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.3-0.4",
+        "n": 71,
+        "meanConfidence": 0.349,
+        "observedFractionReal": 0.042
+      },
+      {
+        "bin": "0.4-0.5",
+        "n": 55,
+        "meanConfidence": 0.45,
+        "observedFractionReal": 0.855
+      },
+      {
+        "bin": "0.5-0.6",
+        "n": 15,
+        "meanConfidence": 0.55,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.6-0.7",
+        "n": 9,
+        "meanConfidence": 0.65,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.7-0.8",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.8-0.9",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.9-1.0",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      }
+    ],
+    "calibrationBinsScaled": [
+      {
+        "bin": "0.0-0.1",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.1-0.2",
+        "n": 2,
+        "meanConfidence": 0.144,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.2-0.3",
+        "n": 69,
+        "meanConfidence": 0.263,
+        "observedFractionReal": 0.043
+      },
+      {
+        "bin": "0.3-0.4",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.4-0.5",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.5-0.6",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.6-0.7",
+        "n": 55,
+        "meanConfidence": 0.617,
+        "observedFractionReal": 0.855
+      },
+      {
+        "bin": "0.7-0.8",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.8-0.9",
+        "n": 15,
+        "meanConfidence": 0.879,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.9-1.0",
+        "n": 9,
+        "meanConfidence": 0.97,
+        "observedFractionReal": 1
+      }
+    ]
+  },
+  {
+    "name": "isot_baseline_seed42",
+    "n": 300,
+    "threshold": 3.5,
+    "accuracy": 0.82,
+    "precision": 0.7976190476190477,
+    "recall": 0.8701298701298701,
+    "f1": 0.8322981366459626,
+    "f1Fake": 0.8057553956834531,
+    "macroF1": 0.8190267661647079,
+    "confusion": {
+      "tp": 67,
+      "tn": 56,
+      "fp": 17,
+      "fn": 10
+    },
+    "auc": 0.8375777777777778,
+    "ece": 0.2147,
+    "eceCalibrated": 0.1512,
+    "platt": {
+      "a": 7.305396637646521,
+      "b": -3.02124874278008
+    },
+    "calibrationBins": [
+      {
+        "bin": "0.0-0.1",
+        "n": 1,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.1-0.2",
+        "n": 4,
+        "meanConfidence": 0.1,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.2-0.3",
+        "n": 54,
+        "meanConfidence": 0.2,
+        "observedFractionReal": 0.093
+      },
+      {
+        "bin": "0.3-0.4",
+        "n": 7,
+        "meanConfidence": 0.3,
+        "observedFractionReal": 0.714
+      },
+      {
+        "bin": "0.4-0.5",
+        "n": 32,
+        "meanConfidence": 0.4,
+        "observedFractionReal": 0.688
+      },
+      {
+        "bin": "0.5-0.6",
+        "n": 2,
+        "meanConfidence": 0.5,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.6-0.7",
+        "n": 34,
+        "meanConfidence": 0.6,
+        "observedFractionReal": 0.912
+      },
+      {
+        "bin": "0.7-0.8",
+        "n": 3,
+        "meanConfidence": 0.7,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.8-0.9",
+        "n": 13,
+        "meanConfidence": 0.8,
+        "observedFractionReal": 0.692
+      },
+      {
+        "bin": "0.9-1.0",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      }
+    ],
+    "calibrationBinsScaled": [
+      {
+        "bin": "0.0-0.1",
+        "n": 5,
+        "meanConfidence": 0.083,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.1-0.2",
+        "n": 54,
+        "meanConfidence": 0.174,
+        "observedFractionReal": 0.093
+      },
+      {
+        "bin": "0.2-0.3",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.3-0.4",
+        "n": 7,
+        "meanConfidence": 0.304,
+        "observedFractionReal": 0.714
+      },
+      {
+        "bin": "0.4-0.5",
+        "n": 32,
+        "meanConfidence": 0.475,
+        "observedFractionReal": 0.688
+      },
+      {
+        "bin": "0.5-0.6",
+        "n": 0,
+        "meanConfidence": 0,
+        "observedFractionReal": 0
+      },
+      {
+        "bin": "0.6-0.7",
+        "n": 2,
+        "meanConfidence": 0.653,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.7-0.8",
+        "n": 34,
+        "meanConfidence": 0.796,
+        "observedFractionReal": 0.912
+      },
+      {
+        "bin": "0.8-0.9",
+        "n": 3,
+        "meanConfidence": 0.89,
+        "observedFractionReal": 1
+      },
+      {
+        "bin": "0.9-1.0",
+        "n": 13,
+        "meanConfidence": 0.944,
+        "observedFractionReal": 0.692
+      }
+    ]
+  }
+]
