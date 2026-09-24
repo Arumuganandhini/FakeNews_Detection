@@ -40,7 +40,7 @@ Text:
 ${text}
 """`;
 
-  const data = await callNimApiJson(prompt, { maxTokens: 1100, temperature: 0.2 });
+  const data = await callNimApiJson(prompt, { maxTokens: 1100, temperature: 0.2, label: 'detailed summary' });
 
   const summary = String(data?.summary || '').trim();
   if (!summary) throw new Error('The model returned no summary text.');

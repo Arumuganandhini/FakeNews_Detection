@@ -81,7 +81,10 @@ const callNimApi = async (prompt, options = {}) => {
     maxTokens: options.maxTokens || 512,
     temperature: options.temperature !== undefined ? options.temperature : 0.7,
     topP: options.topP || 1.0,
-    timeout: 90000
+    timeout: 90000,
+    // Passed to the provider so it can constrain decoding to JSON rather than
+    // relying on the prompt to discourage prose.
+    json: Boolean(options.json)
   };
 
   await acquireSlot();
@@ -350,8 +353,34 @@ const extractJson = (text) => {
  * @param {Object} options - API options (maxTokens etc.)
  * @returns {Promise<Object|Array>} - Parsed JSON response
  */
+/**
+ * Does this object carry the keys the caller actually needs?
+ *
+ * JSON mode stops the model answering in prose; it does not make it answer the
+ * question. Asked for {verdict, supporting_indices, contradicting_indices,
+ * explanation} over eight pieces of coverage, one model returned the bare
+ * array `[1]` — valid JSON, parsed without complaint, and useless. The caller
+ * then saw a missing verdict and recorded the check as unrun.
+ */
+const hasRequiredKeys = (value, requiredKeys, allowArray) => {
+  if (!requiredKeys || requiredKeys.length === 0) return true;
+  // Some callers ask for a list and are equally happy with `{items: [...]}` or
+  // a bare `[...]`; both answer the question. They say so explicitly rather
+  // than every caller having to tolerate an array it cannot use.
+  if (allowArray && Array.isArray(value)) return true;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return requiredKeys.every(key => value[key] !== undefined);
+};
+
 const callNimApiJson = async (prompt, options = {}) => {
   const baseTokens = options.maxTokens || 800;
+  const requiredKeys = options.requiredKeys || [];
+  const allowArray = Boolean(options.allowArray);
+  // Which check is talking. Without it every structured call logs the same
+  // anonymous "JSON reply unusable" and there is no way to tell a failing
+  // headline check from a failing stance judgement without instrumenting the
+  // code again from scratch.
+  const label = options.label || 'model call';
   let lastError;
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -359,15 +388,44 @@ const callNimApiJson = async (prompt, options = {}) => {
     const jsonOptions = {
       temperature: 0.2,
       ...options,
+      // Every caller of this function wants an object back, so every call asks
+      // the provider for one. Without it these models answer in prose and run
+      // the reply budget out before the JSON: measured on a real stance
+      // judgement over eight pieces of coverage, 2,238 characters of
+      // step-by-step reasoning and no object, which the pipeline could only
+      // report as "the check did not run".
+      json: true,
       maxTokens: attempt === 0 ? baseTokens : Math.round(baseTokens * 1.75)
     };
 
-    const text = await callNimApi(prompt, jsonOptions);
+    // A second attempt is told plainly what was wrong with the first. Repeating
+    // the identical prompt and hoping for a different object is not a retry.
+    const attemptPrompt = attempt === 0
+      ? prompt
+      : `${prompt}
+
+Your previous reply was not usable: ${lastError?.message || 'it did not match the format'}. `
+        + `Reply with a single JSON object containing exactly these keys: ${requiredKeys.join(', ') || 'as specified above'}. `
+        + 'No array, no prose, no explanation outside the object.';
+
+    let text;
     try {
-      return extractJson(text);
+      text = await callNimApi(attemptPrompt, jsonOptions);
+    } catch (err) {
+      // A transport failure is the caller's to handle; retrying it here would
+      // double every outage's cost without improving the odds.
+      throw err;
+    }
+
+    try {
+      const parsed = extractJson(text);
+      if (!hasRequiredKeys(parsed, requiredKeys, allowArray)) {
+        throw new Error(`reply was JSON but did not contain ${requiredKeys.join(', ')}`);
+      }
+      return parsed;
     } catch (err) {
       lastError = err;
-      console.warn(`JSON parse failed (attempt ${attempt + 1}):`, err.message);
+      console.warn(`${label}: JSON reply unusable (attempt ${attempt + 1}) — ${err.message}`);
     }
   }
   throw lastError;

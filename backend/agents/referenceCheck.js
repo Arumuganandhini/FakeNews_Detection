@@ -236,7 +236,7 @@ Respond with ONLY a JSON object:
 }`;
 
   try {
-    const result = await callNimApiJson(prompt, { maxTokens: 400 });
+    const result = await callNimApiJson(prompt, { maxTokens: 400, requiredKeys: ['contradicts'], label: 'premise check' });
     const referenceStates = String(result.reference_states || '').trim();
 
     // The model must ground a contradiction in the reference text. An assertion

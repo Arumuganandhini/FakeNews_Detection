@@ -55,7 +55,7 @@ ${text}
 
   // The budget has to hold the model's own reasoning as well as the answer;
   // the answer is read out of the JSON field, so extra thinking is harmless.
-  const data = await callNimApiJson(prompt, { maxTokens: 700, temperature: 0.2 });
+  const data = await callNimApiJson(prompt, { maxTokens: 700, temperature: 0.2, label: 'summary' });
 
   const summary = String(data?.summary || '').trim();
   if (!summary) throw new Error('The model returned no summary text.');

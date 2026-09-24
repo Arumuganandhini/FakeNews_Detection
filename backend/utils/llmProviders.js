@@ -63,14 +63,21 @@ const nim = {
   isConfigured: () => Boolean(process.env.NIM_API_KEY),
   missingKeyMessage: 'NIM_API_KEY is not set. Add it to your backend .env file.',
 
-  async send({ model, prompt, maxTokens, temperature, topP, timeout }) {
+  async send({ model, prompt, maxTokens, temperature, topP, timeout, json }) {
     const response = await axios.post(NIM_URL, {
       model,
       messages: [{ role: 'user', content: prompt }],
       max_tokens: maxTokens,
       temperature,
       top_p: topP,
-      stream: false
+      stream: false,
+      // Asking for JSON is not the same as requesting it in the prompt. These
+      // models reason in prose first and run out of reply budget before they
+      // reach the object: a stance judgement over eight pieces of coverage
+      // produced 2,238 characters of "Let's examine each…" and no JSON at all,
+      // which the pipeline then had to report as an unrun check. Constrained
+      // decoding removes the prose rather than asking the model to skip it.
+      ...(json ? { response_format: { type: 'json_object' } } : {})
     }, {
       headers: {
         Authorization: `Bearer ${process.env.NIM_API_KEY}`,
@@ -121,7 +128,7 @@ const gemini = {
   missingKeyMessage:
     'GEMINI_API_KEY is not set. Add it to your backend .env file to use Gemini.',
 
-  async send({ model, prompt, maxTokens, temperature, topP, timeout }) {
+  async send({ model, prompt, maxTokens, temperature, topP, timeout, json }) {
     const response = await axios.post(
       `${GEMINI_BASE}/${model}:generateContent`,
       {
@@ -129,7 +136,10 @@ const gemini = {
         generationConfig: {
           maxOutputTokens: maxTokens,
           temperature,
-          topP
+          topP,
+          // See the note on the NIM provider: constrained decoding, not a
+          // politely worded instruction.
+          ...(json ? { responseMimeType: 'application/json' } : {})
         }
       },
       {
@@ -197,7 +207,7 @@ const ollama = {
   missingKeyMessage:
     'OLLAMA_HOST is not set. Install Ollama, pull a model, then set OLLAMA_HOST=http://localhost:11434 in backend/.env.',
 
-  async send({ model, prompt, maxTokens, temperature, topP, timeout }) {
+  async send({ model, prompt, maxTokens, temperature, topP, timeout, json }) {
     const host = String(process.env.OLLAMA_HOST || '').replace(/\/+$/, '');
     const response = await axios.post(
       `${host}/api/generate`,
@@ -205,6 +215,8 @@ const ollama = {
         model,
         prompt,
         stream: false,
+        // Ollama's name for the same thing.
+        ...(json ? { format: 'json' } : {}),
         options: {
           temperature,
           top_p: topP,

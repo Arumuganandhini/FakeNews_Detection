@@ -40,8 +40,17 @@ ${keywordFields}
 }
 Return at most ${maxClaims} claims. If the article contains no checkable claims, return an empty array.${isForeign ? `\nWrite "claim" in English so the verdict can be explained to the reader, but keep "search_keywords" in ${language.name}.` : ''}`;
 
-  const result = await callNimApiJson(prompt, { maxTokens: 700 });
-  const claims = Array.isArray(result.claims) ? result.claims : [];
+  // Without requiredKeys, any valid JSON lacking a `claims` key silently
+  // became an empty list — and an empty list here is read as a finding: the
+  // article asserts nothing another outlet could check. The same article came
+  // back REAL on one run and NOT A FACTUAL CLAIM on the next because of it.
+  const result = await callNimApiJson(prompt, { maxTokens: 700, requiredKeys: ['claims'], allowArray: true, label: 'claim extraction' });
+
+  // Some models return the array directly rather than wrapping it. That is a
+  // usable answer, not a malformed one.
+  const claims = Array.isArray(result) ? result
+    : Array.isArray(result.claims) ? result.claims
+    : [];
   return claims
     .filter(c => c && c.claim && c.search_keywords)
     .slice(0, maxClaims)
@@ -56,8 +65,14 @@ Return at most ${maxClaims} claims. If the article contains no checkable claims,
  * Step 2: judge one claim against headlines/descriptions from other outlets.
  */
 const judgeClaim = async (claim, coverage) => {
+  // Six items, not ten, and a tighter budget each. The failure this addresses
+  // scaled with the amount there was to walk through: eight items at 300
+  // characters invited the model to narrate its way through every one of them
+  // and run out of reply budget before answering. Corroboration needs two
+  // independent outlets, so six candidates is ample.
   const evidenceText = coverage
-    .map((a, i) => `[${i + 1}] ${a.source}: "${a.title}" — ${a.description}`.slice(0, 300))
+    .slice(0, 6)
+    .map((a, i) => `[${i + 1}] ${a.source}: "${a.title}" — ${a.description}`.slice(0, 220))
     .join('\n');
 
   const prompt = `You are a claim verification system. Determine whether independent news coverage supports, contradicts, or does not address this claim.
@@ -83,7 +98,15 @@ Use "supported" only if at least one item clearly reports the same fact. Use "co
   // holding in its hand at the time.
   let result;
   try {
-    result = await callNimApiJson(prompt, { maxTokens: 500 });
+    result = await callNimApiJson(prompt, {
+      maxTokens: 700,
+      // The shape the caller cannot work without. Without this the gateway
+      // accepted a bare `[1]` as a successful reply and the verdict below fell
+      // through to undetermined, which the report showed the reader as
+      // "we could not complete the search" on a story eight outlets carried.
+      requiredKeys: ['verdict'],
+      label: 'stance judgement'
+    });
   } catch (err) {
     console.error('Claim judgement failed:', err.message);
     return { verdict: 'undetermined', failed: true, supportingEvidence: [], contradictingEvidence: [],
@@ -93,6 +116,10 @@ Use "supported" only if at least one item clearly reports the same fact. Use "co
   // A recovered-but-truncated reply can arrive without the field at all. That
   // is not a judgement of "unverified" either.
   if (!['supported', 'contradicted', 'unverified'].includes(result?.verdict)) {
+    // Logged, because this is the most common way verification fails and it
+    // used to fail in silence: the only trace was the reader being told the
+    // check had not run.
+    console.error('Claim judgement unusable: verdict was', JSON.stringify(result?.verdict));
     return { verdict: 'undetermined', failed: true, supportingEvidence: [], contradictingEvidence: [],
       discardedEvidence: [], explanation: 'The judgement of this claim came back unreadable, so it was not counted.' };
   }

@@ -136,3 +136,48 @@ test('the summary does not report an outage as an absence of coverage', async ()
     else process.env.NEWS_API_KEY = previousNews;
   }
 });
+
+// Constrained decoding without a shape check is not enough.
+//
+// Asked for {verdict, supporting_indices, contradicting_indices, explanation}
+// over eight pieces of coverage, a model in JSON mode returned the bare array
+// `[1]`. That parses. It carries no verdict, so the judgement fell through to
+// undetermined and the reader was told the check had not run — about a story
+// five outlets were carrying. The gateway now rejects a reply that lacks the
+// keys the caller named, and says so on the retry.
+test('a JSON reply without the required keys is rejected, not accepted', async () => {
+  delete require.cache[require.resolve('../utils/nvidiaNimApi')];
+  const nimPath = require.resolve('../utils/nvidiaNimApi');
+  const llmPath = require.resolve('../utils/llmProviders');
+  const realLlm = require.cache[llmPath];
+
+  const prompts = [];
+  require.cache[llmPath] = {
+    id: llmPath, filename: llmPath, loaded: true,
+    exports: {
+      ...(realLlm ? realLlm.exports : {}),
+      resolveProviderChain: () => ([{
+        name: 'stub', label: 'Stub', models: ['m'], concurrency: 1,
+        isConfigured: () => true,
+        send: async ({ prompt }) => {
+          prompts.push(prompt);
+          // First reply: valid JSON, wrong shape. Second: the real answer.
+          return prompts.length === 1 ? '[1]' : '{"verdict":"supported","supporting_indices":[1]}';
+        }
+      }]),
+      resolveConcurrency: () => 1
+    }
+  };
+
+  try {
+    const { callNimApiJson } = require(nimPath);
+    const out = await callNimApiJson('judge this', { requiredKeys: ['verdict'] });
+    assert.equal(out.verdict, 'supported');
+    assert.equal(prompts.length, 2, 'the bad shape should have forced a second attempt');
+    // The retry has to say what was wrong; repeating the same prompt is not a retry.
+    assert.match(prompts[1], /did not contain verdict/i);
+  } finally {
+    delete require.cache[nimPath];
+    if (realLlm) require.cache[llmPath] = realLlm; else delete require.cache[llmPath];
+  }
+});

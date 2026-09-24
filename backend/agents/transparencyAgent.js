@@ -82,7 +82,7 @@ Respond with ONLY a JSON object, no other text:
 }` + languageDirective(language);
 
   try {
-    const result = await callNimApiJson(prompt, { maxTokens: 900 });
+    const result = await callNimApiJson(prompt, { maxTokens: 900, requiredKeys: ['checks'], label: 'transparency' });
     const raw = result.checks || {};
 
     const checks = CHECKS.map(c => ({

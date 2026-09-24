@@ -81,7 +81,7 @@ Respond with ONLY a JSON object, no other text:
     // Budget trimmed from 1400: this was the slowest factor in the pipeline at
     // ~39s, and the output length was what made it slow. Three well-evidenced
     // techniques tell the reader as much as five.
-    const result = await callNimApiJson(prompt, { maxTokens: 700 });
+    const result = await callNimApiJson(prompt, { maxTokens: 700, requiredKeys: ['techniques'], label: 'manipulation' });
 
     const techniques = (Array.isArray(result.techniques) ? result.techniques : [])
       .filter(t => t && t.quote && t.technique)

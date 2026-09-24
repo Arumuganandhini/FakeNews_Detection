@@ -33,7 +33,7 @@ Respond with ONLY a JSON object, no other text:
 }` + languageDirective(language);
 
   try {
-    const result = await callNimApiJson(prompt, { maxTokens: 450 });
+    const result = await callNimApiJson(prompt, { maxTokens: 450, requiredKeys: ['clickbait_score'], label: 'clickbait' });
     let clickbaitScore = Number(result.clickbait_score);
     if (!Number.isFinite(clickbaitScore)) clickbaitScore = 0;
     clickbaitScore = Math.min(10, Math.max(0, clickbaitScore));

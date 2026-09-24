@@ -38,7 +38,7 @@ Respond with ONLY a JSON object, no other text:
 }` + languageDirective(language);
 
   try {
-    const result = await callNimApiJson(prompt, { maxTokens: 700 });
+    const result = await callNimApiJson(prompt, { maxTokens: 700, requiredKeys: ['bias_score'], label: 'bias' });
     let biasScore = Number(result.bias_score);
     if (!Number.isFinite(biasScore)) biasScore = 0;
     biasScore = Math.min(10, Math.max(0, biasScore));
