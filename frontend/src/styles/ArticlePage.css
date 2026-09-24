@@ -267,14 +267,19 @@ position: relative;
    text rather than reserving the full two-column height. */
 .article-page .article-content:empty { display: none; }
 /* Bottom Section Layout */
+/* The verdict, directly under the headline.
+   It used to be the last thing in the right-hand column, below the summary and
+   the reader comments. A page whose purpose is to answer "can I trust this?"
+   should not make you scroll for the answer. */
+.article-page .article-verdict {
+  margin: 2rem 0 2.5rem;
+}
+
+/* With the verdict lifted out, what remains below is the summary and the
+   reader comments in a single column. */
 .article-page .article-bottom-section {
-  display: grid;
-  /* The trust report is the taller, denser column, so it gets the extra width. */
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  gap: 3rem;
+  display: block;
   margin-top: 3rem;
-  /* Each column takes its own height rather than being stretched to the row. */
-  align-items: start;
 }
 
 /* The summary and the reader feedback are one continuous column.
@@ -861,7 +866,7 @@ position: relative;
     column-count: 1;
   }
 .article-page .article-bottom-section {
-    grid-template-columns: 1fr;
+    margin-top: 2rem;
   }
 .article-page .right-cards {
     gap: 2rem;

@@ -11,8 +11,24 @@
 // than once per reader. When a page cannot be fetched (paywall, blocked, dead
 // link) the feed snippet is used and the caller is told which it got, so it can
 // be honest about a summary that is short because the source was short.
+const crypto = require('node:crypto');
 const ArticleTextCache = require('../models/ArticleTextCache');
 const { extractArticle } = require('./articleExtractor');
+
+/**
+ * A short fingerprint of the text a cached result was derived from.
+ *
+ * Both caches here are keyed on the article URL alone, which assumes a URL
+ * names a fixed piece of writing. Rolling stories break that assumption:
+ * a markets wrap, a live blog or a developing report keeps its URL and
+ * replaces its text. The reader then sees this morning's headline above a
+ * summary of last week's story — observed in the app, a CNBC treasury-yield
+ * piece summarised on 16 September still being shown on 24 September beside a
+ * snippet about a Nasdaq record. Storing what the entry was built from lets a
+ * changed source invalidate it.
+ */
+const fingerprint = (text) =>
+  crypto.createHash('sha1').update(String(text || '')).digest('hex').slice(0, 16);
 
 /** Strip the news feed's truncation marker; it is not part of the article. */
 const stripMarker = (text) =>
@@ -107,13 +123,20 @@ const resolveArticleText = async ({ url, title = '', fallback = '', allowFetch =
 
   // Previously resolved? Reuse it — including a previous failure, so a page
   // that cannot be read is not re-fetched on every visit.
+  const snippetPrint = fingerprint(snippet);
   try {
     const hit = await ArticleTextCache.findOne({ articleUrl: url }).lean();
-    if (hit) {
+    // An entry whose snippet no longer matches the one the feed is serving is
+    // about a different version of this page, so it is re-fetched rather than
+    // reused. Entries written before fingerprinting have none and are trusted
+    // as before.
+    const stale = hit?.snippetPrint && hit.snippetPrint !== snippetPrint;
+    if (hit && !stale) {
       return hit.status === 'ok' && hit.chars >= MIN_USEFUL_CHARS
         ? { text: hit.text, source: 'full', chars: hit.chars }
         : asSnippet();
     }
+    if (stale) console.log(`Article text changed under ${url}; re-reading the page.`);
   } catch (err) {
     console.error('Article text cache read failed:', err.message);
   }
@@ -141,14 +164,16 @@ const resolveArticleText = async ({ url, title = '', fallback = '', allowFetch =
 
   ArticleTextCache.updateOne(
     { articleUrl: url },
-    { $set: { articleUrl: url, ...record, createdAt: new Date() } },
+    { $set: { articleUrl: url, ...record, snippetPrint, createdAt: new Date() } },
     { upsert: true }
   ).catch(err => console.error('Article text cache write failed:', err.message));
 
   return resolved;
 };
 
+// Exported so the summary cache can apply the same test to its own entries.
 module.exports = {
+  fingerprintText: fingerprint,
   resolveArticleText, stripMarker, limitText, looksLikeTheArticle,
   TEXT_BUDGET, MIN_USEFUL_CHARS
 };

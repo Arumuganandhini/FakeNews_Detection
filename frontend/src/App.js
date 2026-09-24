@@ -10,6 +10,7 @@ import ComparePage from './pages/ComparePage';
 import CheckPage from './pages/CheckPage';
 import Navbar from './components/Navbar';
 import api from './services/api';
+import { shouldClearSession } from './services/session';
 import './styles/global.css';
 import './styles/newsprint.css';
 
@@ -34,10 +35,15 @@ const App = () => {
           });
         })
         .catch(error => {
-          console.error('Token verification failed:', error);
-          // Clear invalid token
-          localStorage.removeItem('token');
-          setUser(null);
+          // See services/session.js: a check that could not run is not a
+          // rejected credential, and clearing the token on one signed readers
+          // out mid-session every time the backend restarted.
+          if (shouldClearSession(error)) {
+            localStorage.removeItem('token');
+            setUser(null);
+            return;
+          }
+          console.warn('Could not verify the session just now; keeping it.', error.message);
         })
         .finally(() => {
           setIsLoading(false);

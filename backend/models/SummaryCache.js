@@ -13,6 +13,11 @@ const summaryCacheSchema = new mongoose.Schema({
   articleUrl: { type: String, required: true, index: true },
   kind: { type: String, required: true, enum: ['short', 'detailed'] },
   summary: { type: String, required: true },
+  // What this summary was written from. Keyed on URL alone, a summary of a
+  // story the publisher has since replaced kept being served beside the new
+  // text: the page said the Nasdaq had hit a record while the summary below it
+  // described a sell-off nine days earlier. Same URL, different article.
+  sourcePrint: { type: String },
   createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 * 14 } // 14 days
 });
 

@@ -16,6 +16,10 @@ const mongoose = require('mongoose');
 // fetched is not retried on every visit.
 const articleTextCacheSchema = new mongoose.Schema({
   articleUrl: { type: String, required: true, unique: true, index: true },
+  // Fingerprint of the feed snippet this entry was resolved against. A
+  // publisher that rewrites a page keeps its URL, so the URL alone cannot say
+  // whether a cached body still belongs to the story being displayed.
+  snippetPrint: { type: String },
   text: { type: String, default: '' },
   chars: { type: Number, default: 0 },
   status: { type: String, enum: ['ok', 'unavailable'], default: 'ok' },

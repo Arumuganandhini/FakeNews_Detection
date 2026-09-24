@@ -14,7 +14,7 @@ const { extractArticle } = require('../utils/articleExtractor');
 const { ingestSocialContent } = require('../utils/socialIngest');
 const { readImageText, packForLanguage } = require('../utils/ocr');
 const { assessCheckability } = require('../agents/checkability');
-const { resolveArticleText, limitText, TEXT_BUDGET } = require('../utils/articleText');
+const { resolveArticleText, limitText, TEXT_BUDGET, fingerprintText } = require('../utils/articleText');
 const TrustReportCache = require('../models/TrustReportCache');
 const SummaryCache = require('../models/SummaryCache');
 const auth = require('../middleware/auth');
@@ -40,15 +40,24 @@ const summariseWithCache = async (kind, { url, title, text }, generate) => {
   if (!clean) throw new Error('Article content is required');
 
   // Cache first — a hit costs nothing and skips the page fetch entirely.
+  //
+  // But only when it is a summary of THIS text. A URL is not a stable name for
+  // a piece of writing: a markets wrap, a live blog or a developing story keeps
+  // its address and replaces its contents, and with a 14-day entry keyed on URL
+  // alone the reader was shown a summary of the story that used to live there.
+  // Seen in the app: a page headlined "Nasdaq rose to a new all-time intraday
+  // high" carrying a summary, written nine days earlier, of a sell-off.
+  const sourcePrint = fingerprintText(clean);
   if (url) {
     const hit = await SummaryCache.findOne({ articleUrl: url, kind }).lean();
-    if (hit) {
+    if (hit && (!hit.sourcePrint || hit.sourcePrint === sourcePrint)) {
       return {
         summary: hit.summary,
         cached: true,
         sourceText: { chars: hit.summary.length, coverage: 'cached' }
       };
     }
+    if (hit) console.log(`Article changed under ${url}; re-summarising.`);
   }
 
   // The feed supplies ~200 characters, which is why the "long" summary used to
@@ -62,7 +71,7 @@ const summariseWithCache = async (kind, { url, title, text }, generate) => {
     coverage: resolved.source === 'full' ? 'article-text' : 'publisher-excerpt'
   };
 
-  const key = url ? `${kind}:${url}` : null;
+  const key = url ? `${kind}:${url}:${sourcePrint}` : null;
   let job = key && inFlightSummaries.get(key);
   if (!job) {
     job = generate(body);
@@ -81,7 +90,7 @@ const summariseWithCache = async (kind, { url, title, text }, generate) => {
     // once must hit the cache, not regenerate. Failure is never fatal.
     await SummaryCache.updateOne(
       { articleUrl: url, kind },
-      { $set: { articleUrl: url, kind, summary, createdAt: new Date() } },
+      { $set: { articleUrl: url, kind, summary, sourcePrint, createdAt: new Date() } },
       { upsert: true }
     ).catch(err => console.error('Summary cache write failed:', err.message));
   }

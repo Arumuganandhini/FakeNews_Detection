@@ -416,6 +416,46 @@ const ArticlePage = () => {
             })}
           </span>
         </div>
+
+      {/* The answer, before the article.
+          This sat at the bottom of the right-hand column: the reader scrolled
+          past the headline, the photograph, the standfirst and two buttons to
+          reach the one thing the page exists to tell them. It reads first now,
+          and the story follows. */}
+      <div className="article-verdict">
+        <div className="credibility-card">
+          <h3 className="credibility-title">Can you trust this article?</h3>
+          {loadingStates.credibility ? (
+            <div className="loading-state">
+              <div className="spinner"></div>
+              <p className="loading-text">
+                {completedChecks.length
+                  ? `Checked ${completedChecks.length} of 6…`
+                  : 'Starting the checks…'}
+              </p>
+              <ul className="check-progress">
+                {completedChecks.map(check => (
+                  <li key={check.id} className="check-done">{check.name}</li>
+                ))}
+              </ul>
+              <p className="loading-subtext">
+                Six independent checks are combined into one explainable report.
+              </p>
+            </div>
+          ) : credibility ? (
+            <TrustReport report={credibility} />
+          ) : (
+            <div className="error-message">
+              <p>We couldn&apos;t check this article just now.</p>
+              <button
+                className="feedback-button"
+                onClick={() => analyze('credibility')}
+              >
+                Try again
+              </button>
+            </div>
+          )}
+      </div>
         {article.urlToImage && (
           <img
             className="article-image"
@@ -508,40 +548,6 @@ const ArticlePage = () => {
           </div>
         </div>
 
-        <div className="right-cards">
-          <div className="credibility-card">
-            <h3 className="credibility-title">Can you trust this article?</h3>
-            {loadingStates.credibility ? (
-              <div className="loading-state">
-                <div className="spinner"></div>
-                <p className="loading-text">
-                  {completedChecks.length
-                    ? `Checked ${completedChecks.length} of 6…`
-                    : 'Starting the checks…'}
-                </p>
-                <ul className="check-progress">
-                  {completedChecks.map(check => (
-                    <li key={check.id} className="check-done">{check.name}</li>
-                  ))}
-                </ul>
-                <p className="loading-subtext">
-                  Six independent checks are combined into one explainable report.
-                </p>
-              </div>
-            ) : credibility ? (
-              <TrustReport report={credibility} />
-            ) : (
-              <div className="error-message">
-                <p>We couldn&apos;t check this article just now.</p>
-                <button
-                  className="feedback-button"
-                  onClick={() => analyze('credibility')}
-                >
-                  Try again
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 

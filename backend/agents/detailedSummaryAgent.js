@@ -28,19 +28,28 @@ const generateDetailedSummary = async (article) => {
     : text.length < 1200 ? 'about 80 words'
     : '100 to 150 words';
 
-  const prompt = `Write a summary of the news text below for a reader, in ${target}, covering its key points and any context the text itself gives.
+  // The key is DESCRIBED, not shown as a template.
+  //
+  // Constrained JSON decoding and a placeholder schema do not mix. Given
+  // `{"summary": "<the summary, as plain prose>"}` in JSON mode, the model
+  // returned a bare `{}` on every attempt — valid JSON, no summary, and the
+  // page showed "Failed to analyze summary. Please try again." Asked in words
+  // for an object with one key called "summary", the same model answered
+  // correctly every time. The difference is the template: with the structure
+  // already supplied and the only slot a placeholder, closing the object is a
+  // valid completion.
+  const prompt = `Read the news text below and write a summary of it for a reader in ${target}, covering its key points and any context the text itself gives.
 
 Cover only what the text actually says. If it breaks off mid-story, summarise the part that is there — do not continue the story yourself.
 
-Respond with ONLY this JSON object and nothing else:
-{"summary": "<the summary, as plain prose>"}
+Return a JSON object with exactly one key, "summary", whose value is that summary as a plain-prose string.
 
 Text:
 """
 ${text}
 """`;
 
-  const data = await callNimApiJson(prompt, { maxTokens: 1100, temperature: 0.2, label: 'detailed summary' });
+  const data = await callNimApiJson(prompt, { maxTokens: 1100, temperature: 0.2, requiredKeys: ['summary'], label: 'detailed summary' });
 
   const summary = String(data?.summary || '').trim();
   if (!summary) throw new Error('The model returned no summary text.');
