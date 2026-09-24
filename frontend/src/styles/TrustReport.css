@@ -100,91 +100,6 @@
 }
 
 /* Factor rows */
-.trust-factors {
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--rule);
-}
-
-.trust-factor {
-  border-bottom: 1px solid var(--rule);
-}
-
-.factor-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  padding: 0.65rem 0.25rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-}
-
-.factor-row:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
-
-.factor-info {
-  display: flex;
-  flex-direction: column;
-  min-width: 120px;
-  flex-shrink: 0;
-}
-
-.factor-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--ink-body);
-}
-
-.factor-weight {
-  font-size: 0.7rem;
-  color: var(--ink-muted);
-}
-
-.factor-bar-track {
-  flex: 1;
-  height: 8px;
-  background: var(--paper-sunken);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.factor-bar-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.6s ease;
-}
-
-.factor-score {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--ink-body);
-  min-width: 26px;
-  text-align: right;
-}
-
-.factor-chevron {
-  font-size: 0.7rem;
-  color: var(--ink-muted);
-  transition: transform 0.2s ease;
-}
-
-.factor-chevron.open {
-  transform: rotate(180deg);
-}
-
-/* Expanded factor detail */
-.factor-expanded {
-  padding: 0.25rem 0.5rem 0.9rem;
-  font-size: 0.82rem;
-  color: var(--ink-body);
-  line-height: 1.5;
-}
-
 .factor-explanation {
   font-style: italic;
   color: var(--ink-soft);
@@ -237,31 +152,6 @@
   border-top: none;
 }
 
-.claim-badge {
-  display: inline-block;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0.15rem 0.5rem;
-  border-radius: 3px;
-}
-
-.claim-badge.supported {
-  background: rgba(74, 124, 89, 0.12);
-  color: var(--trust-high);
-}
-
-.claim-badge.contradicted {
-  background: rgba(166, 60, 60, 0.12);
-  color: var(--press-red);
-}
-
-.claim-badge.unverified {
-  background: rgba(138, 133, 116, 0.15);
-  color: var(--ink-soft);
-}
-
 .claim-text {
   margin: 0.35rem 0 0.2rem;
   font-weight: 600;
@@ -294,18 +184,6 @@
   font-style: italic;
   margin-top: 0.25rem;
 }
-
-.trust-footnote {
-  font-size: 0.72rem;
-  color: var(--ink-muted);
-  font-style: italic;
-  text-align: center;
-  margin: 0;
-}
-
-/* ==========================================================================
-   The editor's note — plain-language verdict shown before the working
-   ========================================================================= */
 
 .trust-plain-summary {
   padding: 0 0.25rem;
@@ -404,34 +282,6 @@
 }
 
 /* The working is opt-in, so the panel stays calm by default */
-.working-toggle {
-  display: block;
-  width: 100%;
-  margin-top: 1rem;
-  padding: 0.55rem;
-  font-family: var(--label-font);
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--accent);
-  background: none;
-  border: 1px solid var(--rule-strong);
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
-}
-
-.working-toggle:hover {
-  background: var(--paper-sunken);
-  border-color: var(--rule-heavy);
-}
-
-
-/* ==========================================================================
-   Persuasion techniques — named, quoted in the article's own words
-   ========================================================================= */
-
 .technique-list {
   display: flex;
   flex-direction: column;
@@ -553,25 +403,6 @@
   font-style: italic;
 }
 
-.factor-bar-empty {
-  height: 100%;
-  width: 100%;
-  border-radius: inherit;
-  /* Hatched, not filled — reads as "no reading taken" */
-  background-image: repeating-linear-gradient(
-    45deg,
-    var(--rule) 0px,
-    var(--rule) 3px,
-    transparent 3px,
-    transparent 7px
-  );
-}
-
-.factor-score-none {
-  color: var(--ink-muted);
-  font-weight: 400;
-}
-
 .stood-down-note {
   color: var(--ink-soft);
   font-style: italic;
@@ -579,16 +410,6 @@
 
 /* The evidence check is not one factor among five — it decides the ceiling, so
    it is set apart from the presentation rows above it. */
-.trust-factor.factor-evidence {
-  border-top: 2px solid var(--ink);
-  margin-top: 0.35rem;
-  padding-top: 0.35rem;
-}
-
-/* ==========================================================================
-   The evidence ledger — the arithmetic behind the probability
-   ========================================================================= */
-
 .trust-probability {
   margin: 0;
   font-size: 1rem;
@@ -598,41 +419,6 @@
 .trust-probability strong {
   font-family: var(--headline-font);
   font-size: 1.25rem;
-}
-
-.evidence-ledger {
-  border: 1px solid var(--rule);
-  padding: 0.85rem 1rem;
-  background: var(--paper-aged);
-}
-
-.evidence-ledger h4 {
-  font-family: var(--headline-font);
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin: 0 0 0.6rem;
-}
-
-.evidence-ledger table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-}
-
-.evidence-ledger td {
-  padding: 0.28rem 0;
-  border-bottom: 1px dotted var(--rule);
-  vertical-align: top;
-}
-
-.ledger-label {
-  padding-right: 0.8rem;
-}
-
-.ledger-band {
-  color: var(--ink-muted);
-  font-size: 0.78rem;
 }
 
 .ledger-weight {
@@ -645,11 +431,6 @@
 .ledger-weight.toward-fake { color: var(--press-red, #a63c3c); }
 .ledger-weight.toward-real { color: var(--trust-high, #4a7c59); }
 .ledger-weight.neutral { color: var(--ink-muted); }
-
-.ledger-adjustment .ledger-label {
-  font-style: italic;
-  color: var(--ink-soft);
-}
 
 .ledger-total td {
   border-bottom: none;
@@ -706,27 +487,6 @@
 .verdict-card.verdict-likely-true { border-color: var(--trust-high, #4a7c59); }
 .verdict-card.verdict-unverified { border-color: #8a6d3b; }
 
-.verdict-why {
-  padding: 0 0.2rem;
-}
-
-.verdict-why h4 {
-  font-family: var(--headline-font);
-  font-size: 0.78rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  margin: 0 0 0.35rem;
-  color: var(--ink-soft);
-}
-
-.verdict-why ul {
-  margin: 0;
-  padding-left: 1.1rem;
-  font-size: 0.92rem;
-  line-height: 1.55;
-}
-
-/* Writing quality — a different question, and visibly a different object. */
 .quality-card {
   border: 1px solid var(--rule);
   border-left: 4px solid var(--ink-muted, #6b6459);
@@ -808,30 +568,6 @@
 }
 
 /* The ledger, in words rather than arithmetic. */
-.ledger-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.ledger-list li {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.3rem 0;
-  border-bottom: 1px dotted var(--rule);
-  font-size: 0.84rem;
-}
-
-.ledger-effect {
-  white-space: nowrap;
-  font-style: italic;
-}
-
-.ledger-effect.toward-fake { color: var(--press-red, #a63c3c); }
-.ledger-effect.toward-real { color: var(--trust-high, #4a7c59); }
-.ledger-effect.neutral { color: var(--ink-muted); }
-
 .ledger-outcome {
   margin: 0.7rem 0 0;
   font-size: 0.9rem;
@@ -866,24 +602,6 @@
   flex-wrap: wrap;
 }
 
-.tier-toggle {
-  flex: 1 1 12rem;
-  padding: 0.6rem 0.9rem;
-  font-family: var(--label-font);
-  font-size: 0.82rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--accent);
-  background: none;
-  border: 1px solid var(--rule-strong);
-  cursor: pointer;
-}
-
-.tier-toggle:hover {
-  background: var(--paper-aged);
-  border-color: var(--accent);
-}
-
 .quality-notes {
   margin-top: 0.8rem;
   padding-top: 0.7rem;
@@ -908,4 +626,116 @@
 
 @media (max-width: 480px) {
   .verdict-call { font-size: 1.7rem; }
+}
+
+/* ============================================================================
+   The working — one list.
+   ============================================================================
+
+   It used to be two: a ledger of what moved the answer, then a second list of
+   the same checks with the same numbers in different words. "Who published it"
+   appeared in both, which read as though the publisher had been counted twice.
+   The ledger row is the summary; the check's detail opens underneath it.
+   ========================================================================= */
+
+.trust-panel {
+  border-top: 1px solid var(--rule);
+  padding-top: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.verdict-grounds {
+  margin: 0 0 1rem;
+  padding-left: 1.1rem;
+  color: var(--ink-body);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.working-list {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+.working-row + .working-row { border-top: 1px solid var(--rule); }
+
+.working-row__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.2fr) 1rem;
+  align-items: baseline;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.7rem 0;
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.working-row__head:disabled { cursor: default; }
+
+.working-row__head:not(:disabled):hover .working-row__name { color: var(--accent); }
+
+.working-row__name {
+  font-family: var(--label-font);
+  font-size: 0.86rem;
+  color: var(--ink);
+  min-width: 0;
+}
+
+.working-row__score {
+  font-family: var(--headline-font);
+  font-size: 1rem;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.working-row__score span {
+  font-size: 0.66rem;
+  color: var(--ink-muted);
+}
+
+.working-row__effect {
+  font-size: 0.78rem;
+  text-align: right;
+  min-width: 0;
+}
+
+.working-row__effect.toward-fake { color: var(--press-red, #a63c3c); }
+.working-row__effect.toward-real { color: var(--trust-high, #4a7c59); }
+.working-row__effect.neutral { color: var(--ink-muted); }
+
+/* Bookkeeping rows — the starting point, the overlap discount, the
+   calibration correction — are not evidence and should not read as a check. */
+.working-row.is-bookkeeping .working-row__name {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.working-row__chevron {
+  font-size: 0.7rem;
+  color: var(--ink-muted);
+  transition: transform 0.15s ease;
+}
+
+.working-row__chevron.is-open { transform: rotate(180deg); }
+
+.working-row__detail {
+  padding: 0 0 1rem;
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 600px) {
+  .working-row__head {
+    grid-template-columns: minmax(0, 1fr) auto 1rem;
+    row-gap: 0.25rem;
+  }
+  .working-row__effect {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
 }
