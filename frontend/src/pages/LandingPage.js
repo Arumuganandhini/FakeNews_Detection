@@ -1,281 +1,129 @@
-import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import '../styles/ui.css';
 import '../styles/LandingPage.css';
 
-const LandingPage = () => {
-  const [isVisible, setIsVisible] = useState({
-    features: false,
-    howItWorks: false,
-    cta: false,
-  });
+/**
+ * The front door.
+ *
+ * What used to be here described a different product: a "LLaMA3 model with
+ * RAG-enhanced verification" (the retrieval pipeline was removed), breaking
+ * news alerts (there are none), an adaptive recommendation engine, and four
+ * "Learn more" links to routes that do not exist — every one of them landing
+ * the reader back here via the catch-all. It also carried a five-panel 3D
+ * carousel in purple, blue and green, on a newsprint site.
+ *
+ * This says what the system actually does.
+ */
 
-  // 3D Slider items with different colors and no images
-  const sliderItems = [
-    {
-      title: "Credibility Rating",
-      description: "Our LLaMA3 model analyzes news authenticity with RAG-enhanced verification, checking sources and cross-referencing facts.",
-      color: "#003366",
-      bgColor: "#e6f0fa"
-    },
-    {
-      title: "Intelligent Summarization",
-      description: "Get instant key-point extraction from long articles, saving you time while ensuring you don't miss crucial information.",
-      color: "#5e35b1",
-      bgColor: "#f3e5f5"
-    },
-    {
-      title: "Personalized Feed",
-      description: "Experience news tailored to your interests and reading history with our adaptive recommendation engine.",
-      color: "#0277bd",
-      bgColor: "#e1f5fe"
-    },
-    {
-      title: "Breaking News Alerts",
-      description: "Stay informed with customizable notifications on topics that matter most to you.",
-      color: "#2e7d32",
-      bgColor: "#e8f5e9"
-    },
-    {
-      title: "Source Verification",
-      description: "Trace information back to its origin with our comprehensive source verification system.",
-      color: "#d84315",
-      bgColor: "#fbe9e7"
-    },
-  ];
+const VERDICTS = [
+  {
+    call: 'REAL',
+    tone: 'real',
+    line: 'Independent outlets report the same events.',
+    detail: 'Outlets are counted, not articles: five papers reprinting one wire story are one source, not five.'
+  },
+  {
+    call: 'FAKE',
+    tone: 'fake',
+    line: 'Independent reporting contradicts it, or a premise of it is false.',
+    detail: 'A story built on something that did not happen does not become true because nobody has reported it.'
+  },
+  {
+    call: 'CANNOT VERIFY',
+    tone: 'unknown',
+    line: 'Nothing independent supports it yet.',
+    detail: 'Not a finding that it is false. An honest answer is better than a confident guess.'
+  }
+];
 
-  // Intersection Observer for scroll animations
-  useEffect(() => {
-    const observerOptions = {
-      threshold: 0.1,
-      rootMargin: '0px',
-    };
+const STEPS = [
+  {
+    n: '01',
+    title: 'Give it anything',
+    body: 'A link, a forwarded message, or a screenshot of a post. If what you paste asserts nothing that can be checked, it says so instead of scoring it anyway.'
+  },
+  {
+    n: '02',
+    title: 'It looks for independent reporting',
+    body: 'Six checks run at once, in fifteen languages. Ownership groups, wire syndication and near-duplicate text are collapsed, so corroboration means what it says.'
+  },
+  {
+    n: '03',
+    title: 'You get an answer, and the working',
+    body: 'One line first. Then what was found, and if you want it, every observation that moved the answer and by how much.'
+  }
+];
 
-    const observerCallback = (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          switch (entry.target.id) {
-            case 'features-section':
-              setIsVisible((prev) => ({ ...prev, features: true }));
-              break;
-            case 'how-it-works':
-              setIsVisible((prev) => ({ ...prev, howItWorks: true }));
-              break;
-            case 'cta-section':
-              setIsVisible((prev) => ({ ...prev, cta: true }));
-              break;
-            default:
-              break;
-          }
-        }
-      });
-    };
+const LandingPage = () => (
+  <div className="landing">
+    <header className="landing__hero">
+      <p className="landing__eyebrow">Pure Press</p>
+      <h1 className="landing__headline">
+        Is it true, or is it<br />just well written?
+      </h1>
+      <p className="landing__standfirst">
+        Those are different questions, and most detectors answer the second while appearing
+        to answer the first. A calm headline, neutral language and named sources are all
+        things whoever wrote the story chose. This tells you which question it is answering.
+      </p>
+      <div className="pp-btn-row landing__cta">
+        <Link className="pp-btn pp-btn--primary" to="/signup">Start reading</Link>
+        <Link className="pp-btn pp-btn--quiet" to="/login">Sign in</Link>
+      </div>
+    </header>
 
-    const observer = new IntersectionObserver(observerCallback, observerOptions);
-    const sections = ['features-section', 'how-it-works', 'cta-section']
-      .map((id) => document.getElementById(id))
-      .filter((el) => el);
+    <section className="landing__section">
+      <div className="landing__section-head">
+        <h2>Three answers, and it will use all three</h2>
+        <p>Definite where the evidence is definite, and plainly undecided where it is not.</p>
+      </div>
+      <div className="verdicts">
+        {VERDICTS.map(verdict => (
+          <article className={`verdict verdict--${verdict.tone}`} key={verdict.call}>
+            <h3 className="verdict__call">{verdict.call}</h3>
+            <p className="verdict__line">{verdict.line}</p>
+            <p className="verdict__detail">{verdict.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
 
-    sections.forEach((section) => observer.observe(section));
+    <section className="landing__section landing__section--ruled">
+      <div className="landing__section-head">
+        <h2>The rule the whole thing rests on</h2>
+      </div>
+      <blockquote className="landing__claim">
+        Anything you can observe in the article itself was chosen by whoever wrote it.
+        So it can count against a story — never for it.
+        <footer>
+          Only outlets that had no hand in writing it can speak in its favour. A fabrication
+          polished until it reads like a wire report gets no credit for the polish.
+        </footer>
+      </blockquote>
+    </section>
 
-    return () => {
-      sections.forEach((section) => observer.unobserve(section));
-    };
-  }, []);
-
-  return (
-    <div className="landing-container">
-      {/* Hero Section */}
-      <header className="hero-section">
-        <div className="hero-content">
-          <h1>Smart News Analysis</h1>
-          <p className="hero-subtitle">AI-powered credibility scoring and summarization for the modern reader</p>
-          <div className="cta-buttons">
-            <Link to="/signup" className="cta-primary btn-animated">Start Free Trial</Link>
-            <Link to="/signup" className="cta-secondary btn-animated">Get Started</Link>
-          </div>
-        </div>
-        <div className="hero-image">
-          <div className="mockup-container">
-            <div className="mockup-screen"></div>
-          </div>
-        </div>
-      </header>
-      
-      {/* 3D Slider Section */}
-      <section className="features-slider">
-        <h2 className="section-title">Discover Our Features</h2>
-        <div className="slider-container">
-          <div 
-            className="slider"
-            style={{ '--quantity': sliderItems.length }}
-          >
-            {sliderItems.map((item, index) => (
-              <div
-                className="slider-item"
-                key={index}
-                style={{ 
-                  '--position': index + 1,
-                  '--item-color': item.color,
-                  '--item-bg': item.bgColor
-                }}
-              >
-                <div className="slider-content">
-                  <h3>{item.title}</h3>
-                  <p>{item.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section id="features-section" className="features-section">
-        <h2 className="section-title">Key Benefits</h2>
-        <div className={`card-grid ${isVisible.features ? 'fade-in' : ''}`}>
-          <div className="feature-card">
-            <div className="card-header">
-              <div className="feature-icon">🚀</div>
-              <h3>Faster Information Processing</h3>
+    <section className="landing__section">
+      <div className="landing__section-head">
+        <h2>How it works</h2>
+      </div>
+      <ol className="steps">
+        {STEPS.map(step => (
+          <li className="steps__item" key={step.n}>
+            <span className="steps__n">{step.n}</span>
+            <div>
+              <h3>{step.title}</h3>
+              <p>{step.body}</p>
             </div>
-            <p>Get through more news in less time with our smart summarization technology</p>
-            <Link to="/features/speed" className="card-link">Learn more →</Link>
-          </div>
-          
-          <div className="feature-card">
-            <div className="card-header">
-              <div className="feature-icon">🛡️</div>
-              <h3>Enhanced Fact Checking</h3>
-            </div>
-            <p>Our AI identifies potential misinformation and cross-references multiple sources</p>
-            <Link to="/features/factcheck" className="card-link">Learn more →</Link>
-          </div>
-          
-          <div className="feature-card">
-            <div className="card-header">
-              <div className="feature-icon">🎯</div>
-              <h3>Tailored Experience</h3>
-            </div>
-            <p>Receive news that matters to you without the noise and information overload</p>
-            <Link to="/features/personalization" className="card-link">Learn more →</Link>
-          </div>
-          
-          <div className="feature-card">
-            <div className="card-header">
-              <div className="feature-icon">📱</div>
-              <h3>Cross-platform Access</h3>
-            </div>
-            <p>Access your news feed from any device with our responsive web app and native mobile applications</p>
-            <Link to="/features/devices" className="card-link">Learn more →</Link>
-          </div>
-        </div>
-      </section>
-      
-      {/* How It Works Section */}
-      <section id="how-it-works" className="how-it-works">
-        <h2 className="section-title">How It Works</h2>
-        <div className={`process-cards ${isVisible.howItWorks ? 'fade-in' : ''}`}>
-          <div className="process-card">
-            <div className="step-number">1</div>
-            <h3>Connect Sources</h3>
-            <p>Add your favorite news sites, blogs and social media feeds</p>
-          </div>
-          
-          <div className="process-connector">
-            <div className="connector-dot"></div>
-          </div>
-          
-          <div className="process-card">
-            <div className="step-number">2</div>
-            <h3>AI Analysis</h3>
-            <p>Our system processes content and evaluates credibility</p>
-          </div>
-          
-          <div className="process-connector">
-            <div className="connector-dot"></div>
-          </div>
-          
-          <div className="process-card">
-            <div className="step-number">3</div>
-            <h3>Personalized Delivery</h3>
-            <p>Receive smart summaries tailored to your interests</p>
-          </div>
-          
-          <div className="process-connector">
-            <div className="connector-dot"></div>
-          </div>
-          
-          <div className="process-card">
-            <div className="step-number">4</div>
-            <h3>Stay Informed</h3>
-            <p>Access insights and credibility scores on any device</p>
-          </div>
-        </div>
-      </section>
-      
-      {/* Call To Action Section */}
-      <section id="cta-section" className={`cta-section ${isVisible.cta ? 'zoom-in' : ''}`}>
-        <h2>Start Your Free Trial Today</h2>
-        <p>Join thousands of informed readers who trust our AI-powered news analysis</p>
-        <Link to="/signup" className="cta-primary btn-animated large btn-pulse">Get Started - Free for 14 Days</Link>
-        <p className="no-credit-card">No credit card required</p>
-      </section>
-      
-      {/* Footer */}
-      <footer className="footer">
-        <div className="footer-grid">
-          <div className="footer-column">
-            <h3>Smart News Analysis</h3>
-            <p>AI-powered credibility scoring and summarization for the modern reader</p>
-            <div className="social-icons">
-              <a href="https://twitter.com/" className="social-icon" aria-label="Twitter">
-                <i className="fab fa-twitter"></i>
-              </a>
-              <a href="https://facebook.com/" className="social-icon" aria-label="Facebook">
-                <i className="fab fa-facebook-f"></i>
-              </a>
-              <a href="https://linkedin.com/" className="social-icon" aria-label="LinkedIn">
-                <i className="fab fa-linkedin-in"></i>
-              </a>
-            </div>
-          </div>
-          
-          <div className="footer-column">
-            <h4>Product</h4>
-            <Link to="/features">Features</Link>
-            <Link to="/pricing">Pricing</Link>
-            <Link to="/testimonials">Testimonials</Link>
-            <Link to="/faq">FAQ</Link>
-          </div>
-          
-          <div className="footer-column">
-            <h4>Resources</h4>
-            <Link to="/blog">Blog</Link>
-            <Link to="/guides">Guides</Link>
-            <Link to="/api">API</Link>
-            <Link to="/support">Support</Link>
-          </div>
-          
-          <div className="footer-column">
-            <h4>Company</h4>
-            <Link to="/about">About Us</Link>
-            <Link to="/careers">Careers</Link>
-            <Link to="/press">Press</Link>
-            <Link to="/contact">Contact</Link>
-          </div>
-        </div>
-        
-        <div className="footer-bottom">
-          <p>© {new Date().getFullYear()} Smart News Analysis. All rights reserved.</p>
-          <div className="footer-links">
-            <Link to="/terms">Terms</Link>
-            <Link to="/privacy">Privacy</Link>
-            <Link to="/cookies">Cookies</Link>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
-};
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <footer className="landing__foot">
+      <p className="landing__foot-line">Read the news. Check what you were sent.</p>
+      <Link className="pp-btn pp-btn--primary" to="/signup">Subscribe</Link>
+    </footer>
+  </div>
+);
 
 export default LandingPage;

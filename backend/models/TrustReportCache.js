@@ -10,6 +10,10 @@ const trustReportCacheSchema = new mongoose.Schema({
   title: { type: String },
   source: { type: String },
   report: { type: mongoose.Schema.Types.Mixed, required: true },
+  // Fingerprint of the text this verdict was reached about. A publisher that
+  // rewrites a story keeps its URL, so the URL alone cannot say whether a
+  // stored verdict is still about the article on screen.
+  sourcePrint: { type: String },
   createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 * 14 } // 14 days
 });
 

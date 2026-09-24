@@ -70,19 +70,19 @@ const NewsCard = ({ article, trustBadge }) => {
       // Track click activity
       trackActivity('click');
       
-      // Navigate to article page
-      navigate('/article', { 
-        state: { 
-          article,
-          startTime: Date.now()
-        } 
-      });
+      openArticle();
     } else {
-      // If not logged in, just navigate without tracking
-      navigate('/article', { 
-        state: { article } 
-      });
+      openArticle();
     }
+  };
+
+  // The article travels in router state (so the page renders instantly) AND in
+  // the address bar (so the page survives a reload, a bookmark or a shared
+  // link). Before this the URL said "/article" with nothing after it.
+  const openArticle = () => {
+    navigate(`/article?u=${encodeURIComponent(article.url)}`, {
+      state: { article, startTime: Date.now() }
+    });
   };
 
   const trackActivity = async (activityType) => {

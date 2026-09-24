@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Link2, ClipboardType, Image as ImageIcon } from 'lucide-react';
 import api from '../services/api';
 import TrustReport from '../components/TrustReport';
+import PageShell from '../components/PageShell';
 import '../styles/CheckPage.css';
 
 /**
@@ -120,16 +121,13 @@ const CheckPage = () => {
   const active = MODES.find((m) => m.id === mode);
 
   return (
-    <div className="check-page">
-      <header className="check-header">
-        <h1>Check anything</h1>
-        <p>
-          Paste something you were sent and we will tell you whether it holds up —
-          or say plainly that there is nothing here we can check.
-        </p>
-      </header>
-
-      <form className="check-form" onSubmit={handleSubmit}>
+    <PageShell
+      width="narrow"
+      eyebrow="The verification desk"
+      title="Check anything"
+      standfirst="Paste something you were sent and we will tell you whether it holds up — or say plainly that there is nothing here we can check."
+    >
+      <form className="check-form pp-card" onSubmit={handleSubmit}>
         <div className="check-modes" role="tablist">
           {MODES.map((m) => {
             const Icon = m.icon;
@@ -152,7 +150,7 @@ const CheckPage = () => {
 
         {mode === 'text' && (
           <textarea
-            className="check-textarea"
+            className="pp-textarea"
             rows={7}
             value={text}
             onChange={(e) => { setText(e.target.value); reset(); }}
@@ -162,7 +160,7 @@ const CheckPage = () => {
 
         {mode === 'link' && (
           <input
-            className="check-input"
+            className="pp-input"
             type="url"
             value={url}
             onChange={(e) => { setUrl(e.target.value); reset(); }}
@@ -181,7 +179,7 @@ const CheckPage = () => {
 
         {mode !== 'link' && (
           <input
-            className="check-input check-account"
+            className="pp-input check-account"
             type="text"
             value={account}
             onChange={(e) => setAccount(e.target.value)}
@@ -189,7 +187,7 @@ const CheckPage = () => {
           />
         )}
 
-        <button className="check-submit" type="submit" disabled={!ready() || loading}>
+        <button className="pp-btn pp-btn--primary" type="submit" disabled={!ready() || loading}>
           {loading ? 'Checking…' : 'Check it'}
         </button>
       </form>
@@ -219,7 +217,7 @@ const CheckPage = () => {
           <TrustReport report={report} />
         </section>
       )}
-    </div>
+    </PageShell>
   );
 };
 

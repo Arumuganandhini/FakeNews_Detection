@@ -1,15 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import FeedbackModal from '../components/FeedbackModal';
 import TrustReport from '../components/TrustReport';
+import PageShell from '../components/PageShell';
 import '../styles/ArticlePage.css';
 
 const BASE_URL = process.env.REACT_APP_API_URL ||
   (window.location.hostname.includes('onrender.com')
     ? 'https://news-curator-deployed.onrender.com'
     : 'http://localhost:5000');
-
 
 /**
  * Run a streamed trust analysis, reporting each check as the server finishes it.
@@ -32,7 +31,6 @@ const streamTrustAnalysis = async (body, headers, onStep) => {
   });
 
   if (!response.ok || !response.body) {
-    // No stream available — fall back to the ordinary endpoint.
     const plain = await axios.post(`${BASE_URL}/api/ai/trust-analysis`, body, { headers });
     return plain.data;
   }
@@ -66,47 +64,69 @@ const streamTrustAnalysis = async (body, headers, onStep) => {
   return report;
 };
 
+const formatDate = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf())
+    ? ''
+    : date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+};
+
+/**
+ * One article: what it says, and whether it holds up.
+ *
+ * The verdict comes first. It used to sit at the bottom of the right-hand
+ * column, below the summary and the reader comments, so the answer the page
+ * exists to give was the last thing on it.
+ */
 const ArticlePage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const article = location.state?.article;
   const startTime = location.state?.startTime || Date.now();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // The article used to live only in router state, and the address bar said
+  // "/article" with nothing after it. Reloading the page, bookmarking it,
+  // opening it in a new tab or sending the link to anyone all produced a blank
+  // page that bounced back to the front page. The URL now carries the story,
+  // and the page fetches it when it arrives without state.
+  const linkedUrl = new URLSearchParams(location.search).get('u');
+  const [article, setArticle] = useState(location.state?.article || null);
+  const [recovering, setRecovering] = useState(Boolean(!location.state?.article && linkedUrl));
+  const [recoveryFailed, setRecoveryFailed] = useState(false);
+
+  useEffect(() => {
+    if (article || !linkedUrl) return;
+    let cancelled = false;
+    setRecovering(true);
+    axios.post(`${BASE_URL}/api/ai/extract-article`, { url: linkedUrl })
+      .then(res => { if (!cancelled) setArticle(res.data.article); })
+      .catch(err => {
+        console.error('Could not reopen that article:', err);
+        if (!cancelled) setRecoveryFailed(true);
+      })
+      .finally(() => { if (!cancelled) setRecovering(false); });
+    return () => { cancelled = true; };
+  }, [article, linkedUrl]);
 
   const [summary, setSummary] = useState('');
   const [detailedSummary, setDetailedSummary] = useState('');
   const [summarySourceText, setSummarySourceText] = useState(null);
-  const [detailedSourceText, setDetailedSourceText] = useState(null);
-  const [credibility, setCredibility] = useState(null);
-  // The six checks, filled in as the server reports each one finishing. The
+  const [report, setReport] = useState(null);
+  // The six checks, filled in as the server reports each one finishing, so the
   // reader watches the report being built instead of waiting on a spinner.
   const [completedChecks, setCompletedChecks] = useState([]);
-  const [articleFeedbacks, setArticleFeedbacks] = useState([]);
-  // A list that failed to load is not an empty list. Without this the page
-  // tells the reader "no feedbacks yet" whenever the request fails, which is
-  // a claim about other readers built out of our own error.
-  const [feedbacksFailed, setFeedbacksFailed] = useState(false);
-  const [loadingStates, setLoadingStates] = useState({
-    summary: true,
-    detailedSummary: false,
-    credibility: true,
-    articleFeedbacks: true
-  });
-  const [showModal, setShowModal] = useState(false);
-  const [error, setError] = useState(null);
-  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState({ summary: true, detailedSummary: false, report: true });
+  const [failed, setFailed] = useState({});
 
-  // Which article the page is currently showing. Replies for anything else are
-  // discarded — see the guard in analyze().
+  // Which article the page is showing. Replies for anything else are dropped —
+  // these calls take seconds, and a late one would otherwise land under the
+  // next article's headline.
   const latestRequest = useRef(article?.url);
   useEffect(() => { latestRequest.current = article?.url; }, [article]);
 
-  // Define trackActivity function using useCallback to avoid recreation on each render
   const trackActivity = useCallback(async (activityType, duration = 0) => {
+    const token = localStorage.getItem('token');
+    if (!token || !article) return;
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
       await axios.post(`${BASE_URL}/api/tracking/activity`, {
         articleId: article.url,
         title: article.title,
@@ -115,449 +135,217 @@ const ArticlePage = () => {
         activityType,
         duration,
         completed: activityType === 'read'
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-    } catch (error) {
-      // Silently handle errors
+      }, { headers: { Authorization: `Bearer ${token}` } });
+    } catch (err) {
+      // Reading statistics are not worth interrupting a reader for.
+      console.warn('Could not record this view:', err.message);
     }
   }, [article]);
 
-  // Define analyze function using useCallback
-  const analyze = useCallback(async (type) => {
+  const runSummary = useCallback(async (kind) => {
     if (!article) return;
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const endpoint = kind === 'detailedSummary' ? 'detailed-summary' : 'summarize';
+    const body = {
+      article: article.content || article.description || article.title,
+      url: article.url,
+      title: article.title
+    };
 
-    const content = article.content || article.description || article.title;
-    setLoadingStates(prev => ({ ...prev, [type]: true }));
-    setError(null);
-
+    setBusy(prev => ({ ...prev, [kind]: true }));
+    setFailed(prev => ({ ...prev, [kind]: false }));
     try {
-      let endpoint, body;
-
-      switch (type) {
-        case 'summary':
-          endpoint = '/api/ai/summarize';
-          // The URL lets the server reuse this article's existing summary, so
-          // the same article always reads the same way.
-          body = { article: content, url: article.url, title: article.title };
-          break;
-        case 'detailedSummary':
-          endpoint = '/api/ai/detailed-summary';
-          body = { article: content, url: article.url, title: article.title };
-          break;
-        case 'credibility':
-          endpoint = '/api/ai/trust-analysis';
-          body = {
-            title: article.title,
-            content,
-            source: article.source?.name || article.source || 'Unknown',
-            url: article.url,
-          };
-          break;
-        default:
-          console.warn('Unknown analysis type:', type);
-          return;
-      }
-
-      // Get the token from localStorage
-      const token = localStorage.getItem('token');
-
-      // Add authorization header if token exists
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-
-      // The trust analysis is streamed so each check can be shown as it lands.
-      // Everything else is a single request/response.
-      if (type === 'credibility') {
-        setCompletedChecks([]);
-        const finished = await streamTrustAnalysis(body, headers, (step) => {
-          if (latestRequest.current !== article.url) return;
-          setCompletedChecks(prev =>
-            prev.some(c => c.id === step.id) ? prev : [...prev, step]);
-        });
-        if (latestRequest.current !== article.url) return;
-        setCredibility(finished);
-        return;
-      }
-
-      const response = await axios.post(`${BASE_URL}${endpoint}`, body, { headers });
-
-      // These calls take seconds. If the reader has moved to another article in
-      // the meantime, a late reply belongs to the previous one — dropping it
-      // stops one article's summary appearing under another's headline.
+      const response = await axios.post(`${BASE_URL}/api/ai/${endpoint}`, body, { headers });
       if (latestRequest.current !== article.url) return;
-
-      switch (type) {
-        case 'summary':
-          setSummary(response.data.summary);
-          setSummarySourceText(response.data.sourceText || null);
-          break;
-        case 'detailedSummary':
-          setDetailedSummary(response.data.summary);
-          setDetailedSourceText(response.data.sourceText || null);
-          break;
-        case 'credibility':
-          setCredibility(response.data);
-          break;
-        default:
-          break;
+      if (kind === 'detailedSummary') {
+        setDetailedSummary(response.data.summary);
+      } else {
+        setSummary(response.data.summary);
+        setSummarySourceText(response.data.sourceText || null);
       }
     } catch (err) {
-      console.error(`Error in ${type} analysis:`, err);
-      setError(`Failed to analyze ${type}. Please try again.`);
+      console.error(`${kind} failed:`, err);
+      if (latestRequest.current === article.url) setFailed(prev => ({ ...prev, [kind]: true }));
     } finally {
-      setLoadingStates(prev => ({ ...prev, [type]: false }));
+      setBusy(prev => ({ ...prev, [kind]: false }));
     }
   }, [article]);
 
-  // Redirect if no article data
-  useEffect(() => {
-    if (!article) {
-      navigate('/home');
-    }
-  }, [article, navigate]);
-
-  // Handle tracking when component unmounts
-  useEffect(() => {
-    return () => {
-      // Calculate duration and track activity if user was logged in
-      if (startTime) {
-        const duration = Math.round((Date.now() - startTime) / 1000);
-        trackActivity('read', duration);
-      }
-    };
-  }, [startTime, trackActivity]);
-
-  // Summary and the trust check both start on their own — a reader should
-  // never have to ask the paper whether a story can be trusted.
-  useEffect(() => {
-    if (article) {
-      analyze('summary');
-      analyze('credibility');
-    }
-  }, [article, analyze]);
-
-  useEffect(() => {
-    // Check if user is authenticated
-    const token = localStorage.getItem('token');
-    setIsAuthenticated(!!token);
-  }, []);
-
-  useEffect(() => {
-    const trackArticleView = async () => {
-      if (isAuthenticated && article) {
-        try {
-          const token = localStorage.getItem('token');
-          await axios.post(
-            `${BASE_URL}/api/article-history/track-view`,
-            {
-              articleId: article.url,
-              title: article.title,
-              source: article.source?.name || 'Unknown Source',
-              category: article.category || 'general'
-            },
-            {
-              headers: { Authorization: `Bearer ${token}` }
-            }
-          );
-        } catch (error) {
-          console.error('Error tracking article view:', error);
-        }
-      }
-    };
-
-    if (article) {
-      trackArticleView();
-    }
-  }, [article, isAuthenticated]);
-
-  const fetchArticleFeedbacks = useCallback(async () => {
+  const runReport = useCallback(async () => {
     if (!article) return;
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    setBusy(prev => ({ ...prev, report: true }));
+    setFailed(prev => ({ ...prev, report: false }));
+    setCompletedChecks([]);
     try {
-      const response = await axios.get(`${BASE_URL}/api/article-feedback/all/${encodeURIComponent(article.url)}`);
-      setArticleFeedbacks(response.data.data || []);
-      setFeedbacksFailed(false);
-    } catch (error) {
-      console.error('Error fetching article feedbacks:', error);
-      setFeedbacksFailed(true);
+      const finished = await streamTrustAnalysis({
+        title: article.title,
+        content: article.content || article.description || article.title,
+        source: article.source?.name || article.source || 'Unknown',
+        url: article.url
+      }, headers, (step) => {
+        if (latestRequest.current !== article.url) return;
+        setCompletedChecks(prev => (prev.some(c => c.id === step.id) ? prev : [...prev, step]));
+      });
+      if (latestRequest.current !== article.url) return;
+      setReport(finished);
+    } catch (err) {
+      console.error('Trust analysis failed:', err);
+      if (latestRequest.current === article.url) setFailed(prev => ({ ...prev, report: true }));
     } finally {
-      setLoadingStates(prev => ({ ...prev, articleFeedbacks: false }));
+      setBusy(prev => ({ ...prev, report: false }));
     }
   }, [article]);
 
   useEffect(() => {
-    fetchArticleFeedbacks();
-  }, [fetchArticleFeedbacks]);
+    // Only give up when there is nothing to work from at all.
+    if (!article && !linkedUrl) navigate('/home');
+  }, [article, linkedUrl, navigate]);
 
-  const handleShowFullFeedback = () => {
-    setShowModal(true);
-  };
+  // Both start on their own. A reader should never have to ask the paper
+  // whether a story can be trusted.
+  useEffect(() => {
+    if (!article) return;
+    runSummary('summary');
+    runReport();
+  }, [article, runSummary, runReport]);
 
-  const handleCloseModal = () => {
-    setShowModal(false);
-  };
-
-  const handleSubmitFeedback = async (userFeedback) => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('Please login to submit feedback');
-        return;
-      }
-
-      // Submit feedback to the backend
-      await axios.post(
-        `${BASE_URL}/api/article-feedback/submit`,
-        {
-          articleId: article.url,
-          feedback: userFeedback.feedback,
-          rating: userFeedback.rating
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
-      setShowModal(false);
-
-      // Confirm inline and refresh the list, so the reader sees their own view
-      // appear rather than being interrupted by a browser dialog.
-      setNotice('Thanks — your view has been added below.');
-      setTimeout(() => setNotice(''), 5000);
-      fetchArticleFeedbacks();
-
-    } catch (error) {
-      console.error('Error submitting feedback:', error);
-      setError('We could not save your view. Please try again.');
-    }
-  };
-
-  const handleDetailedSummary = () => {
-    analyze('detailedSummary');
-  };
-
-  const renderArticleFeedbacks = () => {
-    if (loadingStates.articleFeedbacks) {
-      return (
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Loading feedbacks...</p>
-        </div>
-      );
-    }
-
-    if (feedbacksFailed) {
-      return <p className="no-feedbacks">We could not load what other readers said. Try again in a moment.</p>;
-    }
-
-    if (articleFeedbacks.length === 0) {
-      return <p className="no-feedbacks">No feedbacks yet. Be the first to share your thoughts!</p>;
-    }
-
-    return (
-      <div className="article-feedbacks">
-        {articleFeedbacks.map((feedback) => (
-          <div key={feedback._id} className="feedback-item">
-            <div className="feedback-header">
-              {/* A display name, never the address someone signed up with. */}
-              <span className="feedback-user">{feedback.userId?.name || 'A reader'}</span>
-              <span className="feedback-date">
-                {new Date(feedback.createdAt).toLocaleDateString()}
-              </span>
-            </div>
-            <div className="feedback-rating">
-              {'★'.repeat(feedback.rating)}{'☆'.repeat(5 - feedback.rating)}
-            </div>
-            <p className="feedback-text">{feedback.feedback}</p>
-          </div>
-        ))}
-      </div>
-    );
-  };
+  useEffect(() => {
+    if (!article) return;
+    trackActivity('view');
+    return () => {
+      if (startTime) trackActivity('read', Math.round((Date.now() - startTime) / 1000));
+    };
+  }, [article, startTime, trackActivity]);
 
   if (!article) {
     return (
-      <div className="article-page">
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p className="loading-text">Loading article...</p>
-        </div>
-      </div>
+      <PageShell>
+        {recovering ? (
+          <div className="pp-loading">
+            <div className="spinner" />
+            <p className="pp-note">Reopening that story…</p>
+          </div>
+        ) : recoveryFailed ? (
+          <div className="pp-card pp-empty">
+            <p>We could not reopen that story.</p>
+            <button className="pp-btn pp-btn--quiet pp-btn--sm" onClick={() => navigate('/home')}>
+              Back to the front page
+            </button>
+          </div>
+        ) : null}
+      </PageShell>
     );
   }
 
+  const publishedOn = formatDate(article.publishedAt);
+  const excerpt = (article.description || '').trim();
+  const hasExcerpt = excerpt.replace(/[^a-zA-Z0-9]/g, '').length > 3;
+  const fullTextAvailable = summarySourceText?.coverage === 'article-text';
+
   return (
-    <div className="article-page">
-      {/* Anything that fails is said out loud rather than swallowed. */}
-      {error && (
-        <div className="page-notice" role="alert">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} aria-label="Dismiss message">×</button>
-        </div>
-      )}
+    <PageShell>
+      <article className="article">
+        <header className="article__head">
+          <p className="article__kicker">
+            <span className="article__source">{article.source?.name || 'Unknown source'}</span>
+            {publishedOn && <span className="article__date">{publishedOn}</span>}
+          </p>
+          <h1 className="article__title">{article.title}</h1>
+        </header>
 
-      {notice && (
-        <div className="page-notice page-notice-good" role="status">
-          <span>{notice}</span>
-          <button onClick={() => setNotice('')} aria-label="Dismiss message">×</button>
-        </div>
-      )}
-
-      <div className="article-header">
-        <h1 className="article-title">{article.title}</h1>
-        <div className="article-meta">
-          <span className="article-source">{article.source?.name || 'Unknown Source'}</span>
-          <span className="article-date">
-            {new Date(article.publishedAt).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}
-          </span>
-        </div>
-
-      {/* The answer, before the article.
-          This sat at the bottom of the right-hand column: the reader scrolled
-          past the headline, the photograph, the standfirst and two buttons to
-          reach the one thing the page exists to tell them. It reads first now,
-          and the story follows. */}
-      <div className="article-verdict">
-        <div className="credibility-card">
-          <h3 className="credibility-title">Can you trust this article?</h3>
-          {loadingStates.credibility ? (
-            <div className="loading-state">
-              <div className="spinner"></div>
-              <p className="loading-text">
-                {completedChecks.length
-                  ? `Checked ${completedChecks.length} of 6…`
-                  : 'Starting the checks…'}
+        {/* The answer, before the story. */}
+        <section className="article__verdict" aria-label="Verdict">
+          {busy.report ? (
+            <div className="pp-card pp-loading">
+              <div className="spinner" />
+              <p className="pp-note">
+                {completedChecks.length ? `Checked ${completedChecks.length} of 6…` : 'Starting the checks…'}
               </p>
-              <ul className="check-progress">
-                {completedChecks.map(check => (
-                  <li key={check.id} className="check-done">{check.name}</li>
-                ))}
+              <ul className="article__checklist">
+                {completedChecks.map(check => <li key={check.id}>{check.name}</li>)}
               </ul>
-              <p className="loading-subtext">
-                Six independent checks are combined into one explainable report.
-              </p>
             </div>
-          ) : credibility ? (
-            <TrustReport report={credibility} />
+          ) : report ? (
+            <TrustReport report={report} />
           ) : (
-            <div className="error-message">
-              <p>We couldn&apos;t check this article just now.</p>
-              <button
-                className="feedback-button"
-                onClick={() => analyze('credibility')}
-              >
-                Try again
-              </button>
+            <div className="pp-card pp-empty">
+              <p>We could not check this article just now.</p>
+              <button className="pp-btn pp-btn--quiet pp-btn--sm" onClick={runReport}>Try again</button>
             </div>
           )}
-      </div>
-        {article.urlToImage && (
-          <img
-            className="article-image"
-            src={article.urlToImage}
-            alt={article.title}
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = 'https://via.placeholder.com/800x400?text=No+Image+Available';
-            }}
-          />
-        )}
-        {/* Some feed entries carry no description at all, or a stray fragment
-            like a single full stop. Rendering that leaves a lone mark floating
-            under the photo, so the block is skipped unless there is real text. */}
-        {(article.description || '').replace(/[^a-zA-Z0-9]/g, '').length > 3 && (
-          <div className="article-content">
-            <p>{article.description}</p>
-          </div>
-        )}
-        <div className="article-actions">
-          <a
-            href={article.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="feedback-button"
-          >
-            Read Original Article
-          </a>
-          <button
-            className="feedback-button"
-            onClick={() => navigate('/compare', { state: { article } })}
-          >
-            Compare Coverage
-          </button>
-        </div>
-      </div>
+        </section>
 
-      <div className="article-bottom-section">
-        {/* The summary and the reader feedback share the left column. They
-            were previously separate grid items, which tied their heights to
-            the report beside them and left a large gap under the summary. */}
-        <div className="article-left-column">
-          <div className="summary-section">
-            <h2>Summary</h2>
-            {loadingStates.summary ? (
-              <div className="loading-state">
-                <div className="spinner"></div>
-                <p>Generating summary...</p>
-              </div>
-            ) : (
-              <>
-                <p>{summary}</p>
-                {summarySourceText?.coverage === 'publisher-excerpt' && (
-                  <p className="summary-source-note">
-                    Based on the publisher&apos;s short excerpt. Open the original article for fuller context.
-                  </p>
-                )}
-                <div className="summary-actions">
-                  <button
-                    className="action-button"
-                    onClick={handleDetailedSummary}
-                    disabled={loadingStates.detailedSummary}
-                  >
-                    {loadingStates.detailedSummary ? 'Setting type…' : 'Read a longer summary'}
-                  </button>
-                </div>
-                {detailedSummary && (
-                  <div className="detailed-summary">
-                    <h3>Detailed Summary</h3>
-                    <p>{detailedSummary}</p>
-                    {detailedSourceText?.coverage === 'publisher-excerpt' && (
-                      <p className="summary-source-note">
-                        This story was supplied as a short publisher excerpt, so there is no additional verified detail to expand.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </>
+        <section className="article__story">
+          <div className="pp-section-head">
+            <h2>The story</h2>
+            {summarySourceText && (
+              <span className="pp-section-head__note">
+                {fullTextAvailable ? 'From the full article' : "From the publisher's excerpt"}
+              </span>
             )}
           </div>
 
-          <div className="article-feedbacks-section">
-            <div className="feedbacks-header">
-              <h3 className="feedback-title">What readers think</h3>
-              <button className="feedback-button" onClick={handleShowFullFeedback}>
-                Share your view
+          {article.urlToImage && (
+            <img
+              className="article__image"
+              src={article.urlToImage}
+              alt=""
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+          )}
+
+          {/* One account of the story, not two.
+              The page used to print the feed's truncated excerpt and then our
+              summary of the same 200 characters directly beneath it, which for
+              most articles said the same thing twice — once broken off
+              mid-word. The summary reads better, so it leads; the publisher's
+              own words appear only when we have nothing else. */}
+          {busy.summary ? (
+            <div className="pp-loading"><div className="spinner" /></div>
+          ) : summary ? (
+            <p className="article__body">{summary}</p>
+          ) : hasExcerpt ? (
+            <p className="article__body">{excerpt}</p>
+          ) : (
+            <p className="pp-note">The publisher supplied no text with this story.</p>
+          )}
+
+          {failed.summary && (
+            <p className="pp-note">
+              We could not summarise this one.{' '}
+              <button className="article__inline-retry" onClick={() => runSummary('summary')}>Try again</button>
+            </p>
+          )}
+
+          {detailedSummary && <p className="article__body article__body--detail">{detailedSummary}</p>}
+
+          <div className="pp-btn-row article__actions">
+            <a className="pp-btn pp-btn--primary" href={article.url} target="_blank" rel="noopener noreferrer">
+              Read the original
+            </a>
+            <button className="pp-btn pp-btn--quiet" onClick={() => navigate('/compare', { state: { article } })}>
+              Compare coverage
+            </button>
+            {/* Offered only when there is more to say. On a publisher excerpt
+                the "longer" summary came back the same length as the short one,
+                because both were written from the same 200 characters. */}
+            {fullTextAvailable && !detailedSummary && (
+              <button
+                className="pp-btn pp-btn--quiet"
+                onClick={() => runSummary('detailedSummary')}
+                disabled={busy.detailedSummary}
+              >
+                {busy.detailedSummary ? 'Reading…' : 'Longer summary'}
               </button>
-            </div>
-            {renderArticleFeedbacks()}
+            )}
           </div>
-        </div>
-
-        </div>
-      </div>
-
-      {showModal && (
-        <FeedbackModal
-          onSubmit={handleSubmitFeedback}
-          onClose={handleCloseModal}
-        />
-      )}
-    </div>
+        </section>
+      </article>
+    </PageShell>
   );
 };
 

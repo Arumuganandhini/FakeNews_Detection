@@ -427,17 +427,6 @@
   border-color: var(--rule-heavy);
 }
 
-/* Reader-feedback header sits title and action on one line */
-.feedbacks-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.feedbacks-header .feedback-title { margin: 0; }
 
 /* ==========================================================================
    Persuasion techniques — named, quoted in the article's own words

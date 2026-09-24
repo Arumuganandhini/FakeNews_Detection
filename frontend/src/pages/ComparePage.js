@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search, ExternalLink } from 'lucide-react';
 import api from '../services/api';
+import PageShell from '../components/PageShell';
 import '../styles/ComparePage.css';
 
 const LEAN_COLORS = {
@@ -101,16 +102,11 @@ const ComparePage = () => {
     : null;
 
   return (
-    <div className="compare-page">
-      <header className="compare-masthead">
-        <span className="masthead-rule" />
-        <h1 className="compare-title">The Press Comparison</h1>
-        <p className="compare-strapline">
-          One story, side by side — as each newsroom chose to tell it
-        </p>
-        <span className="masthead-rule" />
-      </header>
-
+    <PageShell
+      eyebrow="The press comparison"
+      title="One story, side by side"
+      standfirst="As each newsroom chose to tell it — who is carrying it, what they agree on, and where they part."
+    >
       <form
         className="compare-search"
         onSubmit={(e) => { e.preventDefault(); if (query.trim()) run({ query: query.trim() }); }}
@@ -119,10 +115,11 @@ const ComparePage = () => {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          className="pp-input"
           placeholder="Search a story — e.g. election results, budget announcement"
           aria-label="Search a story to compare"
         />
-        <button type="submit" disabled={loading || !query.trim()}>
+        <button className="pp-btn pp-btn--primary" type="submit" disabled={loading || !query.trim()}>
           <Search size={15} /> {loading ? 'Comparing…' : 'Compare'}
         </button>
       </form>
@@ -225,10 +222,10 @@ const ComparePage = () => {
 
       {!loading && !report && !error && (
         <div className="compare-notice">
-          Search above, or open an article and choose “Compare Coverage”.
+          Search above, or open an article and choose “Compare coverage”.
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 
