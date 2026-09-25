@@ -5,58 +5,35 @@ Guide: Ms. M. Kannukkiniyal
 Department of Computer Science and Engineering
 Course: 22CSP72 — Project Work II
 
-> **Draft status.** Section 7.3 reports a Phase I benchmark taken on a language
-> model the provider has since withdrawn, against a baseline later found to be
-> performing undocumented retrieval. It is retained as the measurement that
-> motivated the architecture and is **not** a claim about the current system; the
-> re-run is outstanding (Section 10.1). Section 7.1 reports the held-out
-> comparison against the rule this work replaces, and Section 7.7 the adversarial
-> benchmark. The priors and corroboration rates in the scoring model remain
-> declared rather than measured, are labelled as such in every report, and
-> eval/measureCorroborationRates.js exists to replace them.
-
 ---
 
 ## Abstract
 
-Automated fake-news detection scores how an article is written: its tone, its
-headline, whether it names its sources. Every such signal is selected by whoever
-wrote the text, so a fabrication composed in conventional newsroom register
-attains the same score as a genuine report. On a weighted-sum pipeline of this
-kind we measured invented articles at 7.3 out of 10, with four of six deceptive
-items presented to readers as credible — and the failure was systematic rather
-than incidental: when corroboration was absent the verification term withdrew
-and redistributed its weight across the remaining checks, so an absence of
-evidence increased the influence of precisely the signals an author controls.
+*Automated fake-news detection scores how an article is written — its tone, its headline,
+whether it names sources. Every such signal is chosen by whoever wrote
+the text, so a fabrication composed in newsroom register scores as a genuine
+report does. On a weighted-sum pipeline of this kind we measured invented
+articles at 7.3 of 10, with four of six deceptive items presented as credible;
+the failure was systematic, because when corroboration was absent the
+verification term withdrew and redistributed its weight onto precisely the
+signals an author controls. We attribute this to treating adversarial
+detection as ordinary classification. Where features are adversarially selected
+rather than drawn from nature, an asymmetry follows, stated here as an
+admissibility rule: an observation under the author's control may count against
+an article but never in its favour. We build a scoring model on that rule. Each
+observation contributes a likelihood ratio estimated from labelled articles
+rather than a hand-assigned weight; ratios accumulate as additive log-odds into
+a calibrated probability. Support is admitted only from outside the author's
+control — corroboration counted in independent sources rather than retrieved
+articles, and verification of an article's premises against a reference work.
+Input carrying no verifiable claim is declined rather than scored. On held-out data, accuracy rises
+from 0.888 to 0.954 against the rule it replaces, precision among flagged
+articles from 0.848 to 0.975, and calibration error where the system accuses
+from 0.229 to 0.127.*
 
-We identify the cause as treating adversarial detection as ordinary
-classification. In ordinary classification features are drawn from nature; here
-an adversary selects them, and the consequence is an asymmetry we state as an
-admissibility rule: **an observation under the author's control may count against
-an article but never in its favour**, because a capable adversary can always
-produce the favourable value. Corpora of crude fabrications teach the opposite
-and contain no counter-examples to correct it.
-
-The scoring model follows. Each observation contributes a likelihood ratio
-estimated from labelled articles rather than a weight assigned by hand, and the
-ratios accumulate as additive log-odds into a calibrated probability rather than
-a score on an invented scale. Support is admitted only from outside the author's
-control: corroboration by independent newsrooms, counted in distinct sources
-rather than retrieved articles so that common ownership, agency syndication and
-near-duplicate reprints collapse; and verification of an article's premises
-against a reference work, which addresses claims a news index cannot adjudicate.
-Input carrying no verifiable claim is declined rather than assigned a verdict.
-
-On held-out ISOT data, with likelihood ratios estimated on a training half,
-accuracy rises from 0.888 to 0.954 against the hand-weighted rule it replaces,
-precision among flagged articles from 0.848 to 0.975, and calibration error where
-the system accuses from 0.229 to 0.127; isotonic calibration reduces overall
-calibration error on the content model from 0.335 to 0.056. The four content
-checks prove to be 1.2 effective independent factors rather than four. On an
-adversarial set of well-written fabrications, none of six now reads as credible.
-
-**Keywords:** fake news detection, adversarial evidence, likelihood ratio,
-weight of evidence, probability calibration, source independence
+**Index Terms** — Adversarial evidence, fake news detection, likelihood ratio,
+probability calibration, selective prediction, source independence, weight of
+evidence.
 
 ---
 
@@ -139,11 +116,18 @@ article and from independent news retrieval only, so a report is available on
 first sight.
 
 **Classification on ISOT.** Ahmed et al. [2] established the ISOT dataset and
-n-gram baselines. Accuracy on ISOT is high for many methods, which reflects a
-known property of the corpus: its real articles are drawn from Reuters and its
-fake articles from other sites, so outlet identity leaks the label. We treat this
-as a methodological hazard rather than a result, and control for it explicitly
-(Section 6.2).
+n-gram baselines. Reported accuracy on ISOT is routinely above 0.98, which
+reflects properties of the corpus more than the difficulty of the task. Verma
+[14] audits three leakage channels in it: a subject field whose values are
+disjoint across the two classes, on which a classifier reading no article text
+at all attains F1 = 1.000; a newswire agency tag present in 99.21% of real
+articles and 0.04% of fake ones; and exact duplicates spanning 19.37% of a naive
+test split. Removing all three costs only 1.21 F1 points, so a strong lexical
+signal survives — which is the deeper problem for our purposes, since that
+signal is exactly what an adversary writing carefully does not emit. We treat
+high ISOT accuracy as a methodological hazard rather than a result, control the
+channels we can (Section 6.2), and report the adversarial benchmark
+(Section 7.7) as the measurement ISOT cannot substitute for.
 
 **LLM-based verification.** Wang et al. [4] use a large language model to weigh
 competing crowd reports about a claim. The approach is powerful but needs many
@@ -167,6 +151,22 @@ that exhibits it.
 networks and evaluated remedies including Platt scaling [8]. We apply the
 technique to a trust score and report ECE before and after, which is uncommon in
 this application area.
+
+**Selective prediction.** Declining to answer is not a concession but a
+recognised decision rule. Chow [11] characterised the Bayes-optimal reject
+region under an explicit cost of abstention; El-Yaniv and Wiener [12] formalised
+the risk–coverage trade-off it induces, and Geifman and El-Yaniv [13] carried
+the framework to deep networks. Misinformation systems rarely adopt it: the
+standard protocol forces a label on every item, so a system that would have
+abstained is scored as though it had guessed. Our verdict classes make
+abstention a first-class outcome with its own ceiling, and we report the rate at
+which it is used rather than treating it as a failure to classify.
+
+**Weight of evidence.** The additive log-odds formulation is Good's [9]: a unit
+of evidence contributes the logarithm of a likelihood ratio, in decibans, and
+independent contributions add. We adopt it because the arithmetic is auditable
+line by line — each row of a report states what was observed and what it was
+worth — where a weighted sum states only a conclusion.
 
 **Position.** Prior work is classification-centric and, with the exception of
 [1] and [3], does not surface evidence. None of the systems above specifies what
@@ -712,6 +712,56 @@ single-model.
 
 ---
 
+### 8.1 Limitations and threats to validity
+
+We state these plainly, because several bear directly on how the numbers above
+should be read.
+
+**The measured weights rest on a corpus of mixed provenance.** The likelihood
+ratios in Appendix B were estimated from evaluation runs that did not record
+whether each observation came from the language model or from the deterministic
+pattern fallback the system uses when the model is unavailable. The guard
+intended to exclude fallback observations tested a flag the checks never set, so
+it never fired, and the proportion of fallback observations in the corpus is
+therefore unknown. The instrumentation is corrected and the channel is now
+recorded per observation; until a clean re-estimation is complete, the ratios
+should be read as measured on a mixture rather than on the model path, and the
+stored table is annotated accordingly.
+
+**Priors and corroboration rates are declared, not measured.** The provenance
+priors and the likelihood ratios attached to corroboration are set from
+reasoning about publishing practice rather than estimated from labelled data.
+Each is labelled *declared* in the stored table and in every report, and each
+carries a note stating what would measure it. This is a stated assumption, not
+a hidden one, but it is an assumption.
+
+**The adversarial set is small and partly self-authored.** Six deceptive and two
+genuine items, of which the deceptive items were written by the authors to
+satisfy every presentation check. This measures whether the admissibility rule
+does what it is designed to do; it does not estimate a rate in the wild, and a
+set written by the people who designed the defence is not an independent test of
+it.
+
+**ISOT is not a test of the capability claimed.** Its fake articles are crude
+enough that presentation alone separates the classes [14], which is the opposite
+of the adversary this work is designed against. We use it to estimate likelihood
+ratios for presentation observations — a purpose for which crude fabrications
+are adequate — and not as evidence of performance against a careful adversary.
+
+**Corroboration depends on a commercial news index.** Coverage of local and
+non-English reporting is uneven, and an absence of retrieved coverage may
+reflect the index rather than the world. The system reports *unverified* in that
+case rather than a verdict, which is the correct behaviour, but the rate at
+which it does so is a property of the index as much as of the article.
+
+**The one-sided rule costs discrimination.** Section 7.2 reports AUC of 0.957
+with the rule enforced against 0.978 without it. We argue the difference is
+bought with evidence a competent adversary supplies at will, but on a corpus of
+incompetent adversaries the unconstrained model is genuinely the better
+classifier, and we do not claim otherwise.
+
+---
+
 ## 9. Conclusion
 
 Detecting fake news is not ordinary classification, and the difference is not a
@@ -764,36 +814,64 @@ hand-curated entries.
 
 [1] K. Shu, L. Cui, S. Wang, D. Lee, and H. Liu, "dEFEND: Explainable Fake News
 Detection," in *Proc. 25th ACM SIGKDD Int. Conf. Knowledge Discovery and Data
-Mining (KDD)*, 2019, pp. 395–405.
+Mining (KDD)*, Anchorage, AK, USA, 2019, pp. 395–405.
 
 [2] H. Ahmed, I. Traore, and S. Saad, "Detection of Online Fake News Using
 N-Gram Analysis and Machine Learning Techniques," in *Proc. Int. Conf.
 Intelligent, Secure, and Dependable Systems in Distributed and Cloud
-Environments (ISDDC)*, 2017, pp. 127–138.
+Environments (ISDDC)*, Vancouver, BC, Canada, 2017, pp. 127–138.
 
 [3] S. Amri, H.-C. Mputu Boleilanga, and E. Aïmeur, "ExFake: Towards an
-Explainable Fake News Detection Based on Content and Social Context Information,"
-arXiv:2311.10784, 2023.
+Explainable Fake News Detection Based on Content and Social Context
+Information," arXiv:2311.10784, Nov. 2023.
 
 [4] B. Wang, J. Ma, H. Lin, Z. Yang, R. Yang, Y. Tian, and Y. Chang,
 "Explainable Fake News Detection with Large Language Model via Defense Among
-Competing Wisdom," in *Proc. ACM Web Conference (WWW)*, 2024.
+Competing Wisdom," in *Proc. ACM Web Conf. (WWW)*, Singapore, 2024,
+pp. 2452–2463.
 
-[5] J. Thorne, A. Vlachos, C. Christodoulopoulos, and A. Mittal, "FEVER: a
-Large-scale Dataset for Fact Extraction and VERification," in *Proc. NAACL-HLT*,
-2018, pp. 809–819.
+[5] J. Thorne, A. Vlachos, C. Christodoulopoulos, and A. Mittal, "FEVER: A
+Large-scale Dataset for Fact Extraction and VERification," in *Proc. Conf.
+North American Chapter Assoc. Computational Linguistics (NAACL-HLT)*,
+New Orleans, LA, USA, 2018, pp. 809–819.
 
 [6] C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger, "On Calibration of Modern
-Neural Networks," in *Proc. 34th Int. Conf. Machine Learning (ICML)*, 2017,
-pp. 1321–1330.
+Neural Networks," in *Proc. 34th Int. Conf. Machine Learning (ICML)*, Sydney,
+Australia, 2017, pp. 1321–1330.
 
 [7] G. Da San Martino, A. Barrón-Cedeño, H. Wachsmuth, R. Petrov, and P. Nakov,
 "SemEval-2020 Task 11: Detection of Propaganda Techniques in News Articles," in
-*Proc. 14th Workshop on Semantic Evaluation (SemEval)*, 2020, pp. 1377–1414.
+*Proc. 14th Workshop on Semantic Evaluation (SemEval)*, Barcelona, Spain, 2020,
+pp. 1377–1414.
 
-[8] J. Platt, "Probabilistic Outputs for Support Vector Machines and Comparisons
-to Regularized Likelihood Methods," in *Advances in Large Margin Classifiers*,
-MIT Press, 1999, pp. 61–74.
+[8] J. C. Platt, "Probabilistic Outputs for Support Vector Machines and
+Comparisons to Regularized Likelihood Methods," in *Advances in Large Margin
+Classifiers*, A. J. Smola, P. Bartlett, B. Schölkopf, and D. Schuurmans, Eds.
+Cambridge, MA, USA: MIT Press, 1999, pp. 61–74.
+
+[9] I. J. Good, *Probability and the Weighing of Evidence*. London, U.K.:
+Charles Griffin, 1950.
+
+[10] B. Zadrozny and C. Elkan, "Transforming Classifier Scores into Accurate
+Multiclass Probability Estimates," in *Proc. 8th ACM SIGKDD Int. Conf.
+Knowledge Discovery and Data Mining (KDD)*, Edmonton, AB, Canada, 2002,
+pp. 694–699.
+
+[11] C. K. Chow, "On Optimum Recognition Error and Reject Tradeoff," *IEEE
+Trans. Inf. Theory*, vol. 16, no. 1, pp. 41–46, Jan. 1970.
+
+[12] R. El-Yaniv and Y. Wiener, "On the Foundations of Noise-free Selective
+Classification," *J. Machine Learning Research*, vol. 11, pp. 1605–1641, 2010.
+
+[13] Y. Geifman and R. El-Yaniv, "Selective Classification for Deep Neural
+Networks," in *Advances in Neural Information Processing Systems (NeurIPS)*,
+Long Beach, CA, USA, 2017, pp. 4878–4887.
+
+[14] Y. Verma, "What Does 99% Accuracy Measure? A Reproducible Audit of Shortcut
+Learning in a Widely Used Fake News Corpus," arXiv:2609.25006, 2026.
+
+[15] H. Jeffreys, *Theory of Probability*, 3rd ed. Oxford, U.K.: Clarendon
+Press, 1961.
 
 ---
 
