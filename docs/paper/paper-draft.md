@@ -11,8 +11,9 @@ Course: 22CSP72 — Project Work II
 
 *Automated fake-news detection scores how an article is written: its tone, its
 headline, whether it names sources. Every such signal is chosen by whoever
-wrote it, so a fabrication in newsroom register scores as a genuine report. On a weighted-sum pipeline of this kind we measured invented articles at
-7.3 of 10, four of six deceptive items reading as credible, and the failure was
+wrote it, so a fabrication in newsroom register scores as a genuine report does.
+On a weighted-sum pipeline of this kind we measured invented articles at 7.3 of
+10, four of six deceptive items reading as credible, and the failure was
 systematic: when corroboration was absent the verification term redistributed
 its weight onto the signals an author controls. We attribute this to treating
 adversarial detection as ordinary classification. Where features are selected
@@ -128,7 +129,7 @@ signal survives — which is the deeper problem for our purposes, since that
 signal is exactly what an adversary writing carefully does not emit. We treat
 high ISOT accuracy as a methodological hazard rather than a result, control the
 channels we can (Section 6.2), and report the adversarial benchmark
-(Section 7.7) as the measurement ISOT cannot substitute for.
+(Section 7.6) as the measurement ISOT cannot substitute for.
 
 **LLM-based verification.** Wang et al. [4] use a large language model to weigh
 competing crowd reports about a claim. The approach is powerful but needs many
@@ -250,21 +251,28 @@ and model, and a **cache** keyed by article URL.
 
 ### 4.2 The observations
 
-**[1] Source reputation** (weight 0.15). A curated database of 90 outlets, each
+No weight is attached to any observation in this section. Each is described by
+what it measures; what it is worth is estimated from labelled data
+(Section 4.3), and the estimates are in Appendix B. The earlier design assigned
+these weights by hand, and replacing that assignment with measurement is one of
+the contributions of this work.
+
+
+**[1] Source reputation.** A curated database of 90 outlets, each
 with a factual-reporting rating, editorial lean, and outlet type, matched by name
 and domain alias. Matching is whole-word and prefix-based; substring matching was
 found to produce false positives (Section 5.2).
 
-**[2] Headline quality** (0.10). Structured scoring of clickbait signals —
+**[2] Headline quality.** Structured scoring of clickbait signals —
 curiosity gap, sensational verbs, unsubstantiated superlatives, listicle
 framing — returning the specific signals present rather than a score alone.
 
-**[3] Language** (0.15). Flags individual sentences exhibiting political bias,
+**[3] Language.** Flags individual sentences exhibiting political bias,
 one-sided reporting, emotional manipulation, or opinion presented as fact. Each
 flagged sentence is returned verbatim with its type and a reason, and is
 displayed to the reader as a quotation.
 
-**[4] Source transparency** (0.18). Answers a question the other content factors
+**[4] Source transparency.** Answers a question the other content factors
 cannot: *could a reader go and verify any of this?* A five-point journalism
 checklist — names its sources (3), uses attributed quotes (2), points to primary
 evidence (2), gives concrete detail (2), claims are measured (1) — scored out of
@@ -276,13 +284,13 @@ This factor is deliberately independent of external evidence, which makes it the
 one content factor that remains informative for an obscure story no other outlet
 has covered — precisely when cross-source verification abstains.
 
-**[5] Persuasion technique** (0.15). Detects techniques from the SemEval-2020
+**[5] Persuasion technique.** Detects techniques from the SemEval-2020
 Task 11 taxonomy [7], reduced to fourteen categories that occur in mainstream
 reporting and are recognisable to a non-specialist. Each detection must quote the
 span it applies to. At most three are reported, each costing 2.6 points from a
 base of 10.
 
-**[6] Cross-source verification** (0.27). Claims are extracted from the article,
+**[6] Cross-source verification.** Claims are extracted from the article,
 then for each claim the system retrieves coverage from *other* outlets (the
 article's own source excluded) and judges stance over the retrieved items,
 citing the specific articles that support or contradict. Verdicts are
@@ -317,8 +325,8 @@ ratio
 $$\Lambda(o) \;=\; \frac{P(o \mid \text{fabricated})}{P(o \mid \text{genuine})}$$
 
 estimated from labelled articles by binning the observation and counting, with a
-Jeffreys prior and shrinkage to the conservative end of a 95% interval, so a bin
-supported by few articles contributes nothing. Ratios are reported in decibans,
+Jeffreys prior [15] and shrinkage to the conservative end of a 95% interval, so
+a bin supported by few articles contributes nothing. Ratios are reported in decibans,
 $W(o) = 10\log_{10}\Lambda(o)$, because decibans add: the posterior is a sum a
 reader can check by hand.
 
@@ -355,8 +363,10 @@ very nearly one observation reported twice.
 
 **Calibration.** The clamp discards exculpatory evidence and leaves genuine
 articles massed at the prior, which makes the raw posterior systematically
-under-confident. An isotonic map fitted on held-out data corrects the
-ranking-to-probability step; the corpus base rate is divided out in log-odds
+under-confident. An isotonic map [10] fitted on held-out data corrects the
+ranking-to-probability step; isotonic regression is preferred to the sigmoid of
+Platt scaling [8] here because the clamp makes the score-to-probability relation
+monotone but not sigmoidal, and Section 7.1 measures both; the corpus base rate is divided out in log-odds
 space before the article's own prior is applied, so the map transports between
 populations rather than importing the corpus composition. The clamp is
 re-applied after calibration, because a monotone map fitted where fluent prose
@@ -408,7 +418,7 @@ analyser using lexicons and surface patterns — the methods by which these task
 were measured before neural models, and the reason lexicon baselines accompany
 the SemEval propaganda task. Degraded results are marked as such in the report,
 at both the summary and per-factor level, so a weaker analysis is never presented
-as a full one. Section 7.6 reports its discriminative power.
+as a full one. Section 7.5 reports its discriminative power.
 
 ---
 
@@ -430,7 +440,7 @@ an unrelated trade dispute. Extracted text is therefore accepted only if at leas
 half of the headline's distinctive terms appear in it; otherwise the feed
 snippet is used. Across a ten-article sample, extraction was accepted for seven.
 
-Text supplied to the model is bounded (Section 7.3).
+Text supplied to the model is bounded (Section 7.4).
 
 ### 5.2 Source matching
 
@@ -547,41 +557,43 @@ the legacy hand-weighted rule — which admits exculpatory style evidence freely
 reaches 0.978. The gain is real and it is a trap: it comes from learning that fluent prose indicates a
 genuine article, which holds on a corpus whose fabrications are crude and fails
 against a competent one. ISOT contains no competent fabrications to expose the
-error; the adversarial set of Section 7.7 contains ten. We report both
+error; the adversarial set of Section 7.6 contains ten. We report both
 configurations and ship the clamp.
 
-### 7.3 Classification and ablation *(historical configuration)*
+### 7.3 Phase I measurement — superseded, retained for the record
 
-n = 300 per configuration, stratified 150 fake / 150 real, seed 42, model
-`meta/llama-3.1-8b-instruct`, four-factor pipeline:
+The following is **not a result about the system described in this paper.** It
+was measured on a four-factor pipeline, using a model
+(`meta/llama-3.1-8b-instruct`) that its provider has since withdrawn, against a
+baseline later found to be performing undocumented retrieval. The transparency
+and persuasion factors did not exist when it was taken. It is retained because
+it is the measurement that motivated the architecture, and removing it would
+hide the reasoning; it should not be read as evidence about the present system,
+and Section 7.1 is the measurement that is.
+
+n = 300 per configuration, stratified 150 fake / 150 real, seed 42:
 
 | Configuration | Accuracy | Macro-F1 | ROC-AUC | ECE raw | ECE calibrated |
 |---|---|---|---|---|---|
 | Single-prompt baseline | 82.0% | 81.9% | 0.838 | 0.215 | 0.151 |
-| **Pipeline (clickbait + bias)** | **94.7%** | **94.7%** | **0.987** | 0.277 | **0.073** |
+| Pipeline (clickbait + bias) | 94.7% | 94.7% | 0.987 | 0.277 | 0.073 |
 | Ablation: clickbait only | 93.3% | 93.3% | 0.975 | 0.339 | 0.118 |
 | Ablation: bias only | 92.7% | 92.7% | 0.934 | 0.359 | 0.204 |
 
-Decomposing the judgment into focused factors outperformed a single holistic
-prompt over the *same* model by 12.7 accuracy points and 0.149 AUC. The ablation
-ordering is clean — bias-only 0.934 < clickbait-only 0.975 < combined 0.987 —
-so both factors contribute and their combination is strictly best.
+Two things in it shaped the design. Decomposing the judgement into focused
+factors outperformed a single holistic prompt over the same model by 12.7
+accuracy points, which is the case for a factored pipeline over an
+LLM-black-box. And the ablation ordering is clean — bias alone 0.934, clickbait
+alone 0.975, combined 0.987 — so the factors contribute separately rather than
+one carrying the other. Platt scaling [8] fitted on the validation half reduced
+expected calibration error from 0.277 to 0.073, which is what first indicated
+that raw scores from this kind of pipeline rank adequately and state
+probabilities badly.
 
-**This table must be read as a historical result.** The model has since been
-withdrawn by its provider, and the transparency and persuasion factors did not
-exist when it was produced. It is retained because it is the measurement that
-motivated the architecture; it is not a claim about the present system. The
-re-run is Section 10.1.
+Re-running these ablations on the current pipeline and a current model is
+Section 10.1.
 
-### 7.4 Calibration *(historical configuration)*
-
-Raw scores rank well but cluster mid-range, giving ECE 0.277. Platt scaling [8],
-fitted on the validation half, reduces this to 0.073 — inside the conventional
-well-calibrated range — so a 70% trust score corresponds to approximately 70%
-empirical probability. Reliability-diagram data is in
-`backend/eval/results/summary.json`.
-
-### 7.5 Input length and structured-output reliability
+### 7.4 Input length and structured-output reliability
 
 Model reply budgets are shared between reasoning and the required JSON. Feeding
 more article text is therefore not monotonically beneficial. Measured on a
@@ -599,7 +611,7 @@ characters accordingly — still four to five times the news API's snippet. This
 a property of the deployed model rather than of the architecture, and the bound
 is configuration.
 
-### 7.6 Degradation
+### 7.5 Degradation
 
 The deterministic fallback was evaluated with the language model made
 unreachable:
@@ -620,7 +632,7 @@ therefore produced a confident "Mostly fine ≈5.5/10" report assembled from fou
 placeholders, indistinguishable at the interface from a completed analysis. This
 is the concrete instance of gap 5 in Section 3.
 
-### 7.7 Adversarial benchmark
+### 7.6 Adversarial benchmark
 
 ISOT cannot test the failure this work addresses. Its fabrications are
 conspicuously crude, so any system scoring style performs well on it while
@@ -648,7 +660,7 @@ false-negative one; `--live-genuine` substitutes current articles from the feed
 for exactly this reason. And ten items is a demonstration, not a population
 estimate.
 
-### 7.8 Evidence grounding
+### 7.7 Evidence grounding
 
 Because every factor quotes the article, its output is directly checkable. On a
 hand-constructed article containing both verifiable facts and deliberately loaded
@@ -663,7 +675,7 @@ A live-news verification study with manual annotation of verdict correctness
 (target: 30 claims, reporting coverage rate and verdict precision) is
 outstanding.
 
-### 7.9 System behaviour
+### 7.8 System behaviour
 
 Measured on the deployed system:
 
@@ -672,7 +684,7 @@ Measured on the deployed system:
 | Cold analysis, one article | ~60 s (to 116 s under congestion) | **11–19 s** |
 | Cached analysis | full recomputation | **~5 ms** |
 | First factor visible to the reader | on completion | **< 1 s** |
-| Automated backend tests passing | — | **42 / 42** |
+| Automated backend tests passing | — | **124 / 124** |
 
 Provider comparison, three structured tasks, three runs each:
 
@@ -701,7 +713,7 @@ factors.
 
 ## 8. Discussion
 
-**On abstention as a correctness property.** The defect in Section 7.4 is the
+**On abstention as a correctness property.** The defect in Section 7.5 is the
 clearest argument for the design. A system that emits a neutral score on failure
 is not merely imprecise; it is *misleading in a specific direction*, because a
 neutral score on a 0–10 scale reads as mild reassurance. Any system combining
@@ -726,17 +738,6 @@ pages through news search — consumes a request budget of 100 per day that the
 article feed itself depends on. Direct search of fact-checker sites was tested
 and is unusable, as their result pages render in JavaScript. The code is retained
 and documented for reactivation.
-
-**Threats to validity.** ISOT is 2016–2017 US political news; distribution shift
-to current news is unmeasured. Stance judgment reads headlines and descriptions
-rather than full bodies; a natural-language-inference model is a drop-in upgrade.
-Language-model factors inherit model bias, which low temperature and structured
-output reduce variance but not bias in. The source database covers 90 outlets,
-so smaller publishers frequently receive no reliability record — the most common
-gap observed in deployment. The Section 7.1 measurement is single-dataset and
-single-model.
-
----
 
 ### 8.1 Limitations and threats to validity
 
@@ -765,9 +766,9 @@ Each is labelled *declared* in the stored table and in every report, and each
 carries a note stating what would measure it. This is a stated assumption, not
 a hidden one, but it is an assumption.
 
-**The adversarial set is small and partly self-authored.** Six deceptive and two
-genuine items, of which the deceptive items were written by the authors to
-satisfy every presentation check. This measures whether the admissibility rule
+**The adversarial set is small and partly self-authored.** Ten items, six of
+them deceptive and two genuine reports, and the deceptive items were written by
+the authors to satisfy every presentation check. This measures whether the admissibility rule
 does what it is designed to do; it does not estimate a rate in the wild, and a
 set written by the people who designed the defence is not an independent test of
 it.
@@ -785,10 +786,20 @@ case rather than a verdict, which is the correct behaviour, but the rate at
 which it does so is a property of the index as much as of the article.
 
 **The one-sided rule costs discrimination.** Section 7.2 reports AUC of 0.957
-with the rule enforced against 0.978 without it. We argue the difference is
-bought with evidence a competent adversary supplies at will, but on a corpus of
-incompetent adversaries the unconstrained model is genuinely the better
-classifier, and we do not claim otherwise.
+with the rule enforced against 0.973 without it, and 0.978 for the legacy rule.
+We argue the difference is bought with evidence a competent adversary supplies
+at will, but on a corpus of incompetent adversaries the unconstrained model is
+genuinely the better classifier, and we do not claim otherwise.
+
+**Further threats.** ISOT is 2016–2017 United States political news, and shift
+to current news is unmeasured. Stance judgement reads headlines and standfirsts
+rather than full article bodies; a natural-language-inference model over full
+text is a direct substitution. The language-model factors inherit whatever bias
+the model carries, and low temperature with structured output reduces variance
+but not bias. The outlet database covers ninety publishers, so smaller ones
+frequently receive no reliability record, which is the most common gap we
+observed in use. Every measurement in Section 7.1 is single-dataset and
+single-model.
 
 ---
 
@@ -824,9 +835,13 @@ as a clean bill of health.
 
 ### 10.1 Immediate
 
-Re-run the full benchmark on the current six-factor pipeline and current model,
-with ablations for the transparency and persuasion factors, replacing
-Section 7.1. Complete the live-news verification study in Section 7.5.
+Enlarge the estimation corpus. The likelihood ratios rest on 239 articles
+(Section 8.1), which leaves several observation bands too thin to estimate; the
+instrumentation to extend it cleanly is in place and the constraint is model
+quota rather than method. Re-run the ablations of Section 7.3 on the current
+six-factor pipeline and a current model, so that table ceases to be historical.
+Complete the live-news verification study described in Section 7.7, annotating
+thirty claims by hand for coverage rate and verdict precision.
 
 ### 10.2 Planned
 
@@ -908,7 +923,7 @@ Press, 1961.
 
 ## Appendix A — Reproducibility
 
-Every figure in Sections 7.1, 7.2 and 7.7 is reproducible without any API key,
+Every figure in Sections 7.1, 7.2 and 7.6 is reproducible without any API key,
 because the estimation, the held-out comparison and the adversarial benchmark all
 run on stored factor outputs and deterministic analysers:
 
@@ -918,7 +933,7 @@ npm test                                  # 103 tests, no keys required
 node eval/estimateWeights.js              # measure the likelihood ratios
 node eval/validateScoring.js              # Section 7.1
 node eval/validateScoring.js --no-clamp   # Section 7.2, the ablation
-node eval/adversarialBench.js --no-model  # Section 7.7
+node eval/adversarialBench.js --no-model  # Section 7.6
 ```
 
 Reproducing Section 7.3, the historical ISOT run, additionally needs a model
