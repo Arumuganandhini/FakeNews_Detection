@@ -52,6 +52,8 @@ const argValue = (name, fallback) => {
 
 const BIN_COUNT = Number(argValue('--bins', 5));
 const DRY_RUN = args.includes('--dry-run');
+// Estimate only from records that state which channel produced each factor.
+const CLEAN_ONLY = args.includes('--clean-only');
 
 /** ISOT labels: 0 = fabricated, 1 = genuine. */
 const FABRICATED = 0;
@@ -114,6 +116,16 @@ const loadRecords = (inputPath) => {
           if (degraded) {
             for (const name of degraded) delete factors[name];
             if (Object.keys(factors).length === 0) { dropped++; continue; }
+          } else if (CLEAN_ONLY) {
+            // --clean-only: estimate from records whose measurement channel is
+            // known, and from those alone. The table this produces is thinner
+            // — fewer articles, so more bins fall below the count at which a
+            // ratio can be estimated and contribute nothing — but every ratio
+            // in it was measured on the path the deployed pipeline runs. That
+            // is a different and stronger claim than a ratio measured on an
+            // unknown mixture, and it is the claim the paper needs.
+            unknownChannel++;
+            continue;
           } else {
             unknownChannel++;
           }
@@ -126,8 +138,10 @@ const loadRecords = (inputPath) => {
   }
   if (unknownChannel) {
     console.warn(
-      `${unknownChannel} of ${records.length} records predate channel recording: ` +
-      'it is not known whether their factors came from the model or the pattern matcher.'
+      CLEAN_ONLY
+        ? `${unknownChannel} records skipped: they predate channel recording, and --clean-only was given.`
+        : `${unknownChannel} of ${records.length} records predate channel recording: ` +
+          'it is not known whether their factors came from the model or the pattern matcher.'
     );
   }
   if (dropped) console.warn(`${dropped} records dropped: every factor had fallen back to the pattern check.`);
@@ -497,7 +511,7 @@ const main = () => {
     // How much of the corpus is known to have come from the model path. A
     // record with `unknownChannel` predates the recording of that channel and
     // may carry pattern-matcher scores pooled in with model ones.
-    corpus,
+    corpus: { ...corpus, cleanOnly: CLEAN_ONLY },
     sources,
     families: {
       style: {
