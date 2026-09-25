@@ -125,79 +125,113 @@ const CheckPage = () => {
         <div className="press-dateline">The Verification Desk</div>
         <h1 className="press-name">Check Anything</h1>
         <div className="press-tagline">
-          Paste it and we will tell you whether it holds up
+          A link, a forwarded message, or a screenshot — we will tell you whether it holds up
         </div>
       </header>
 
-      <p className="check-lede">
-        A link, a forwarded message, or a screenshot of a post. We will say
-        plainly whether it holds up — or that there is nothing here we can check.
-      </p>
-
-      <form className="check-form" onSubmit={handleSubmit}>
-        <div className="check-modes" role="tablist">
-          {MODES.map((m) => {
-            const Icon = m.icon;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                role="tab"
-                aria-selected={mode === m.id}
-                className={`check-mode ${mode === m.id ? 'active' : ''}`}
-                onClick={() => chooseMode(m.id)}
-              >
-                <Icon size={15} /> {m.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <p className="check-hint">{active.hint}</p>
-
-        {mode === 'text' && (
-          <textarea
-            className="press-input check-textarea"
-            rows={7}
-            value={text}
-            onChange={(e) => { setText(e.target.value); reset(); }}
-            placeholder="Paste the message or post here…"
-          />
-        )}
-
-        {mode === 'link' && (
-          <input
-            className="press-input"
-            type="url"
-            value={url}
-            onChange={(e) => { setUrl(e.target.value); reset(); }}
-            placeholder="https://…"
-          />
-        )}
-
-        {mode === 'image' && (
-          <div className="check-upload">
-            <input id="check-image" type="file" accept="image/*" onChange={handleImage} />
-            <label htmlFor="check-image" className="check-upload-label">
-              {imageName || 'Choose a screenshot…'}
-            </label>
+      {/* Two columns, because one narrow form adrift in a full-width sheet is
+          what the page looked like before: a lot of bare paper and nothing to
+          justify it. The right-hand column carries what a reader needs BEFORE
+          they submit — the three answers they can get, and the fact that some
+          input gets none — which until now only appeared after the fact, in a
+          refusal they had no way to anticipate. */}
+      <div className="check-layout">
+        <form className="check-form" onSubmit={handleSubmit}>
+          <div className="check-modes" role="tablist">
+            {MODES.map((m) => {
+              const Icon = m.icon;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === m.id}
+                  className={`check-mode ${mode === m.id ? 'active' : ''}`}
+                  onClick={() => chooseMode(m.id)}
+                >
+                  <Icon size={15} /> {m.label}
+                </button>
+              );
+            })}
           </div>
-        )}
 
-        {mode !== 'link' && (
-          <input
-            className="press-input check-account"
-            type="text"
-            value={account}
-            onChange={(e) => setAccount(e.target.value)}
-            placeholder="Who posted it? (optional — helps us judge the source)"
-          />
-        )}
+          <p className="check-hint">{active.hint}</p>
 
-        <button className="press-btn check-submit" type="submit" disabled={!ready() || loading}>
-          {loading ? 'Checking…' : 'Check it'}
-        </button>
-      </form>
+          {mode === 'text' && (
+            <textarea
+              className="press-input check-textarea"
+              rows={9}
+              value={text}
+              onChange={(e) => { setText(e.target.value); reset(); }}
+              placeholder="Paste the message or post here…"
+            />
+          )}
+
+          {mode === 'link' && (
+            <input
+              className="press-input"
+              type="url"
+              value={url}
+              onChange={(e) => { setUrl(e.target.value); reset(); }}
+              placeholder="https://…"
+            />
+          )}
+
+          {mode === 'image' && (
+            <div className="check-upload">
+              <input id="check-image" type="file" accept="image/*" onChange={handleImage} />
+              <label htmlFor="check-image" className="check-upload-label">
+                {imageName || 'Choose a screenshot…'}
+              </label>
+            </div>
+          )}
+
+          {mode !== 'link' && (
+            <input
+              className="press-input check-account"
+              type="text"
+              value={account}
+              onChange={(e) => setAccount(e.target.value)}
+              placeholder="Who posted it? (optional — helps us judge the source)"
+            />
+          )}
+
+          <button className="press-btn check-submit" type="submit" disabled={!ready() || loading}>
+            {loading ? 'Checking…' : 'Check it'}
+          </button>
+        </form>
+
+        <aside className="check-aside">
+          <h2 className="check-aside__head">What you will get back</h2>
+          <dl className="check-verdicts">
+            <div className="check-verdict check-verdict--real">
+              <dt>Real</dt>
+              <dd>Independent outlets report the same events.</dd>
+            </div>
+            <div className="check-verdict check-verdict--fake">
+              <dt>Fake</dt>
+              <dd>Independent reporting contradicts it, or a premise of it is false.</dd>
+            </div>
+            <div className="check-verdict check-verdict--unknown">
+              <dt>Cannot verify</dt>
+              <dd>Nothing independent supports it yet. Not a finding that it is false.</dd>
+            </div>
+          </dl>
+
+          <p className="check-aside__note">
+            Outlets are counted, not articles: five papers carrying one wire
+            story count as one source.
+          </p>
+
+          <h2 className="check-aside__head">What it will refuse</h2>
+          <p className="check-aside__note">
+            A question, an opinion, or something too vague to place gets no
+            verdict — only a note saying what would make it checkable. A system
+            that answers what it cannot answer teaches you to distrust the
+            answers it gets right.
+          </p>
+        </aside>
+      </div>
 
       {error && <p className="check-error">{error}</p>}
 

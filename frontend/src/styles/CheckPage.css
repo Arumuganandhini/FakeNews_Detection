@@ -15,18 +15,27 @@
    ========================================================================= */
 
 /* The sheet is the standard 1400px, like the front page, the comparison, the
-   article and the dashboard. It was 820px — press-sheet-narrow plus an override
-   — which left a band of bare desk down both sides that no other page has.
-   What needs a reading measure is the text inside it, not the paper. */
+   article and the dashboard.
 
-/* A standfirst under the masthead, set as a newspaper would set one. */
-.check-lede {
-  max-width: 62ch;
-  margin: 0 auto 2.25rem;
-  text-align: center;
-  font-size: 1.02rem;
-  line-height: 1.7;
-  color: var(--ink-soft);
+   Width alone was not the fix. At 820px the page had bare desk down both
+   sides; widened to 1400 it had bare paper instead, because a single narrow
+   form cannot fill a broadsheet. The page needed a layout, not a measurement:
+   the form on the left, and on the right the thing a reader most needs before
+   they submit — which of three answers they might get, and the fact that some
+   input gets none. That only appeared afterwards before, inside a refusal
+   nobody could anticipate.
+   ========================================================================= */
+
+.check-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 2.5rem;
+  /* Stretch, not start. Sizing the textarea to match the aside's height was
+     guesswork that broke the moment either column's content changed; letting
+     the grid equalise them and the textarea take up the slack holds whatever
+     goes in either side. */
+  align-items: stretch;
+  margin-bottom: 2.5rem;
 }
 
 /* -------------------------------------------------------------- The form */
@@ -35,8 +44,6 @@
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  max-width: 860px;
-  margin: 0 auto 2rem;
   padding: 1.5rem 1.75rem;
   background: var(--paper-aged);
   border-top: 1px solid var(--rule-heavy);
@@ -85,8 +92,10 @@
   color: var(--ink-muted);
 }
 
+/* Takes the slack so both columns finish level, whatever the aside holds. */
 .check-page .check-textarea {
-  min-height: 9rem;
+  flex: 1;
+  min-height: 12rem;
   line-height: 1.6;
   resize: vertical;
 }
@@ -94,6 +103,69 @@
 .check-page .check-account { font-size: 0.88rem; }
 
 .check-page .check-submit { align-self: flex-start; }
+
+/* ------------------------------------------------------------- The aside */
+
+.check-aside {
+  padding: 1.5rem 1.75rem;
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-top: 4px double var(--ink);
+}
+
+.check-aside__head {
+  font-family: var(--headline-font);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin: 0 0 0.9rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.check-aside__head + .check-aside__note { margin-top: 0; }
+
+.check-aside__note {
+  font-size: 0.86rem;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  margin: 1.1rem 0 1.75rem;
+}
+
+.check-verdicts { margin: 0; }
+
+.check-verdict {
+  padding: 0.6rem 0 0.6rem 0.85rem;
+  border-left: 3px solid var(--trust-unknown);
+}
+
+.check-verdict + .check-verdict { margin-top: 0.5rem; }
+
+.check-verdict--real { border-left-color: var(--trust-high); }
+.check-verdict--fake { border-left-color: var(--trust-low); }
+.check-verdict--unknown { border-left-color: var(--trust-unknown); }
+
+.check-verdict dt {
+  font-family: var(--label-font);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 0.2rem;
+}
+
+.check-verdict--real dt { color: var(--trust-high); }
+.check-verdict--fake dt { color: var(--trust-low); }
+.check-verdict--unknown dt { color: var(--trust-unknown); }
+
+.check-verdict dd {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
 
 /* ------------------------------------------------------------ The upload */
 
@@ -178,7 +250,12 @@
   border-top: 4px double var(--ink);
 }
 
+@media (max-width: 900px) {
+  .check-layout { grid-template-columns: 1fr; gap: 1.75rem; }
+}
+
 @media (max-width: 640px) {
   .check-page .check-modes { gap: 0.85rem; }
-  .check-page .check-form { padding: 1rem; }
+  .check-page .check-form,
+  .check-aside { padding: 1.1rem 1.2rem; }
 }
