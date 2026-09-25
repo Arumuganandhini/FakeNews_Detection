@@ -44,6 +44,12 @@ const { estimateFactor, estimateDamping, binFor } = require('./estimateWeights')
 
 const args = process.argv.slice(2);
 const NO_CLAMP = args.includes('--no-clamp');
+// Validate on records whose measurement channel is known, matching
+// estimateWeights.js --clean-only. Without it the held-out split is drawn from
+// the pooled corpus while the ratios come from the clean one, which measures
+// a model against data it was not estimated on in a way that is not a
+// held-out test but a mismatch.
+const CLEAN_ONLY = args.includes('--clean-only');
 
 const FABRICATED = 0;
 
@@ -70,6 +76,14 @@ const loadRecords = () => {
           const factors = { ...row.factors };
           delete factors.baseline;
           if (!Object.keys(factors).length) continue;
+
+          const degraded = Array.isArray(row.degraded) ? row.degraded : null;
+          if (degraded) {
+            for (const name of degraded) delete factors[name];
+            if (!Object.keys(factors).length) continue;
+          } else if (CLEAN_ONLY) {
+            continue;
+          }
           records.push({ id: `${file}:${row.id}`, label: row.label, factors });
         } catch (_) { /* ignore a truncated line */ }
       }

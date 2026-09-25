@@ -102,9 +102,29 @@ test('the system never reports certainty', () => {
   assert.ok(overwhelming.probabilityFabricated > 0);
 });
 
-test('a factor with no measured ratio is listed, not quietly ignored', () => {
+// The property, not the example.
+//
+// This used to name transparency, which had 18 labelled examples and so could
+// not be estimated. The clean re-estimation gave it 239 and it is now measured,
+// which is the fix working — but it left the test asserting a fact about the
+// corpus rather than about the code. What must hold is that a factor without a
+// measured ratio contributes exactly nothing AND is named in the report, so a
+// reader can tell "this check found nothing" from "this check was not weighed".
+test('a factor with no measured ratio contributes nothing and is named', () => {
   const result = assess({ ...POLISHED, transparency: 9 }, UNKNOWN_OUTLET);
-  const named = result.unmeasured.map(u => u.factor);
-  assert.ok(named.includes('transparency'), 'transparency has too little labelled data to estimate');
-  for (const entry of result.unmeasured) assert.strictEqual(entry.decibans, 0);
+
+  for (const entry of result.unmeasured) {
+    assert.strictEqual(entry.decibans, 0, `${entry.factor} was listed as unmeasured but carried weight`);
+    assert.ok(entry.reason, `${entry.factor} was listed as unmeasured without saying why`);
+  }
+
+  // Nothing may contribute weight without appearing in the ledger the reader
+  // is shown; silence is the failure mode this guards against.
+  const namedInLedger = new Set(result.ledger.map(entry => entry.label));
+  for (const entry of result.ledger) {
+    if (entry.step === 'factor') {
+      assert.ok(namedInLedger.has(entry.label));
+      assert.ok(entry.basis, `${entry.label} moved the answer without stating its basis`);
+    }
+  }
 });

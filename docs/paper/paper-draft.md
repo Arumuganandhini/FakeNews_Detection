@@ -9,27 +9,27 @@ Course: 22CSP72 — Project Work II
 
 ## Abstract
 
-*Automated fake-news detection scores how an article is written — its tone, its headline,
-whether it names sources. Every such signal is chosen by whoever wrote
-the text, so a fabrication composed in newsroom register scores as a genuine
-report does. On a weighted-sum pipeline of this kind we measured invented
-articles at 7.3 of 10, with four of six deceptive items presented as credible;
-the failure was systematic, because when corroboration was absent the
-verification term withdrew and redistributed its weight onto precisely the
-signals an author controls. We attribute this to treating adversarial
-detection as ordinary classification. Where features are adversarially selected
-rather than drawn from nature, an asymmetry follows, stated here as an
-admissibility rule: an observation under the author's control may count against
-an article but never in its favour. We build a scoring model on that rule. Each
-observation contributes a likelihood ratio estimated from labelled articles
-rather than a hand-assigned weight; ratios accumulate as additive log-odds into
-a calibrated probability. Support is admitted only from outside the author's
-control — corroboration counted in independent sources rather than retrieved
-articles, and verification of an article's premises against a reference work.
-Input carrying no verifiable claim is declined rather than scored. On held-out data, accuracy rises
-from 0.888 to 0.954 against the rule it replaces, precision among flagged
-articles from 0.848 to 0.975, and calibration error where the system accuses
-from 0.229 to 0.127.*
+*Automated fake-news detection scores how an article is written: its tone, its
+headline, whether it names sources. Every such signal is chosen by whoever
+wrote it, so a fabrication in newsroom register scores as a genuine report. On a weighted-sum pipeline of this kind we measured invented articles at
+7.3 of 10, four of six deceptive items reading as credible, and the failure was
+systematic: when corroboration was absent the verification term redistributed
+its weight onto the signals an author controls. We attribute this to treating
+adversarial detection as ordinary classification. Where features are selected
+by an adversary rather than drawn from nature, an asymmetry follows, stated
+here as an admissibility rule: an observation under the author's control may
+count against an article, never in its favour. We build a scoring model on that
+rule. Each observation contributes a likelihood ratio estimated from labelled
+articles rather than a hand-assigned weight, and the ratios accumulate as
+additive log-odds into a calibrated probability. Support is admitted only from
+outside the author's control: corroboration counted in independent sources
+rather than retrieved articles, and premises checked against a reference work.
+Input carrying no verifiable claim is declined rather than scored. On a
+held-out split of 120 articles the model matches the rule it replaces on
+accuracy — 114 correct against 115 — and ranks slightly worse, while
+calibration error where the system accuses falls twentyfold, from 0.267 to
+0.013. The trade is deliberate: the discrimination given up is supplied by
+evidence an adversary controls.*
 
 **Index Terms** — Adversarial evidence, fake news detection, likelihood ratio,
 probability calibration, selective prediction, source independence, weight of
@@ -81,9 +81,10 @@ well written, and unsupported — rather than averaging to something reassuring.
    interval, and stored with the counts that produced it. A factor with too
    little data to estimate contributes exactly zero and is named as such in the
    report, rather than receiving an invented weight.
-3. **Correlation-aware combination.** The content checks are measured at r = 0.78
-   and amount to 1.2 effective independent factors of four; their summed weight
-   is scaled accordingly, where the previous design counted one piece of
+3. **Correlation-aware combination.** The content checks correlate at a mean
+   r = 0.55 and amount to 1.52 effective independent factors of four — the
+   strongest pair, headline quality and language, at r = 0.93 — so their summed
+   weight is scaled accordingly, where the previous design counted one piece of
    evidence four times.
 4. **Independence-aware corroboration.** Retrieved coverage is reduced to the
    sources it actually represents by a curated ownership model, agency-syndication
@@ -347,8 +348,10 @@ credibility at any value.
 same prose and are not conditionally independent. Under equicorrelation $\bar r$
 the effective count of independent factors among $k$ is
 $k / (1 + (k-1)\bar r)$, and the family's summed weight is scaled by
-$n_\text{eff}/k$. Measured, $\bar r = 0.78$ over four checks gives
-$n_\text{eff} = 1.2$.
+$n_\text{eff}/k$. Measured on the clean corpus, $\bar r = 0.55$ over four checks
+gives $n_\text{eff} = 1.52$, a damping factor of 0.379. The strongest pair,
+headline quality and language, correlates at $r = 0.93$: on this corpus they are
+very nearly one observation reported twice.
 
 **Calibration.** The clamp discards exculpatory evidence and leaves genuine
 articles massed at the prior, which makes the raw posterior systematically
@@ -496,29 +499,52 @@ this corpus and historical articles have no live coverage, so neither provenance
 nor corroboration is exercised — this measures the content half of the model
 alone, which is the honest scope of the claim.
 
-n = 829 held-out articles:
+The corpus is 239 articles whose measurement channel is recorded: every factor
+in it was produced by the language model rather than by the deterministic
+fallback the system uses when the model is unavailable. An earlier table was
+estimated on 1,642 records that did not record the channel, in unknown
+proportion; those are excluded here (Section 8.1). Of 239, 119 train and 120
+test.
 
-| | Accuracy | ROC-AUC | ECE (all) | ECE when accusing | Precision when accusing |
-|---|---|---|---|---|---|
-| Legacy hand-weighted sum | 0.888 | 0.970 | 0.221 | 0.229 | 0.848 |
-| **Weight of evidence (shipped)** | **0.954** | 0.957 | 0.285 | **0.127** | **0.975** |
+n = 120 held-out articles:
 
-Calibration of the content model, before and after isotonic regression fitted on
-the training half: **ECE 0.335 → 0.056**.
+| Model | Acc. | AUC | ECE | ECE-a | Prec-a | Brier |
+|---|---|---|---|---|---|---|
+| Legacy sum | 0.958 | 0.978 | 0.237 | 0.267 | 0.968 | 0.101 |
+| WoE, raw | 0.950 | 0.973 | 0.308 | 0.257 | 0.967 | 0.142 |
+| WoE, isotonic | 0.950 | 0.957 | 0.028 | 0.013 | 0.967 | 0.048 |
 
-Two figures deserve comment rather than celebration. The shipped configuration's
-*overall* ECE is worse than the legacy rule's, and this is the clamp's doing: by
-refusing exculpatory evidence the system declines to become confident that a
-well-written article is genuine, and that deliberate under-confidence registers
-as calibration error. Every residual error points toward greater suspicion; the
-model never overstates confidence in an article's favour. Where it accuses —
-which is where a false statement does harm — it is roughly twice as well
-calibrated as the rule it replaces, and considerably more precise.
+ECE-a and Prec-a are expected calibration error and precision computed over the
+predictions where the system accuses, that is where it states a probability of
+fabrication above one half. Lower is better for every column but accuracy, AUC
+and precision.
+
+**The accuracy difference is one article.** 114 correct against 115, of 120. We
+draw no conclusion from it, and the earlier claim that accuracy rose from 0.888
+to 0.954 does not survive the clean re-estimation: it was measured on the
+contaminated corpus and is withdrawn. On ISOT the two models classify
+equivalently, and the legacy rule ranks slightly better (AUC 0.978 against
+0.957).
+
+What does separate them is calibration, by a factor of twenty where it matters
+most. Where the system accuses — which is where a false statement does harm —
+expected calibration error falls from 0.267 to 0.013, and the Brier score from
+0.101 to 0.048. A hand-weighted sum that is right about which articles are
+fabricated can still be badly wrong about how sure it is; the reader sees the
+confidence, not the ranking.
+
+This is the result the design predicts rather than a disappointing one. The
+admissibility rule removes evidence from the model — all of the exculpatory
+evidence a corpus of crude fabrications makes available — so discrimination on
+that corpus can only fall or hold. What is bought with it is a probability that
+means what it says, and a system whose residual error points toward suspicion
+rather than toward false reassurance.
 
 ### 7.2 What the admissibility rule costs
 
-Disabling the clamp raises ROC-AUC from 0.957 to 0.978 on this corpus. The gain
-is real and it is a trap: it comes from learning that fluent prose indicates a
+Disabling the clamp raises ROC-AUC from 0.957 to 0.973 on the clean corpus, and
+the legacy hand-weighted rule — which admits exculpatory style evidence freely —
+reaches 0.978. The gain is real and it is a trap: it comes from learning that fluent prose indicates a
 genuine article, which holds on a corpus whose fabrications are crude and fails
 against a competent one. ISOT contains no competent fabrications to expose the
 error; the adversarial set of Section 7.7 contains ten. We report both
@@ -717,16 +743,20 @@ single-model.
 We state these plainly, because several bear directly on how the numbers above
 should be read.
 
-**The measured weights rest on a corpus of mixed provenance.** The likelihood
-ratios in Appendix B were estimated from evaluation runs that did not record
-whether each observation came from the language model or from the deterministic
-pattern fallback the system uses when the model is unavailable. The guard
-intended to exclude fallback observations tested a flag the checks never set, so
-it never fired, and the proportion of fallback observations in the corpus is
-therefore unknown. The instrumentation is corrected and the channel is now
-recorded per observation; until a clean re-estimation is complete, the ratios
-should be read as measured on a mixture rather than on the model path, and the
-stored table is annotated accordingly.
+**The corpus is small.** The weights and the held-out comparison rest on 239
+articles, 119 training and 120 test. A one-article difference in accuracy is
+not a difference, and we do not treat it as one. The earlier figures, estimated
+on 1,642 records, were larger but of unknown provenance: the guard intended to
+exclude pattern-matcher observations tested a flag the checks never set, so it
+never fired, and the proportion of fallback observations was unknown. That
+instrumentation is corrected, the channel is recorded per observation, and this
+table is estimated with `--clean-only` from records that state it. We prefer
+239 articles of known provenance to 1,642 of unknown, and state the cost:
+ISOT's score distribution is bimodal, so the middle bands remain thin and
+several contribute nothing. The re-estimation stopped at 239 rather than the
+intended 300 because both model providers became unavailable mid-run — one
+returning 503, the other out of quota — and the remaining articles were not
+worth waiting on at the rate the run had dropped to.
 
 **Priors and corroboration rates are declared, not measured.** The provenance
 priors and the likelihood ratios attached to corroboration are set from
@@ -775,10 +805,11 @@ We stated that asymmetry as an admissibility rule, built a scoring model on it i
 which every weight is a likelihood ratio measured from labelled data rather than
 a constant chosen by hand, and reported the result as a probability that can be
 checked against outcomes rather than a score on an invented scale. Held out, this
-raised accuracy from 0.888 to 0.954 and precision among flagged articles from
-0.848 to 0.975, while halving calibration error where the system accuses. It also
-costs something, and we report that too: two points of ranking performance on a
-corpus that cannot express the attack the rule defends against.
+leaves accuracy where the rule it replaces left it — 114 correct against 115, of
+120 — and reduces calibration error where the system accuses twentyfold, from
+0.267 to 0.013. It also costs something, and we report that too: two points of
+ranking performance, on a corpus that cannot express the attack the rule defends
+against.
 
 The property we regard as central is what the system does when it does not know.
 It declines input carrying no verifiable claim, says what is missing, and
@@ -913,29 +944,44 @@ written as JSONL. Provider and model are set by `LLM_PROVIDER`,
 
 ## Appendix B — Measured weights of evidence
 
-Estimated by `eval/estimateWeights.js` over 1,642 labelled articles, in decibans
-after shrinkage to the conservative end of a 95% interval. Positive values point
-toward fabrication. Values in the exculpatory half are shown as measured, and are
-**not** admitted for author-controlled observations (Section 4.3).
+Estimated by `eval/estimateWeights.js --clean-only` over 239 labelled articles
+whose measurement channel is recorded, in decibans after shrinkage to the
+conservative end of a 95% interval. Positive values point toward fabrication.
+Values in the exculpatory half are shown as measured and are **not** admitted
+for author-controlled observations (Section 4.3).
 
-| Observation | Band | Measured (db) | Admitted (db) |
-|---|---|---|---|
-| Headline quality | 0–2 | +11.5 | +11.5 |
-| Headline quality | 8–10 | −11.3 | 0 |
-| Language (bias) | 0–2 | +15.6 | +15.6 |
-| Language (bias) | 8–10 | −12.4 | 0 |
-| Persuasion technique | 2–4 | +5.8 | +5.8 |
-| Persuasion technique | 8–10 | −5.4 | 0 |
-| Source reputation | all bands | 0 | 0 |
-| Source transparency | — | not estimated | 0 |
+| Observation | Band | Fab / Gen | Measured (db) | Admitted (db) |
+|---|---|---|---|---|
+| Headline quality | 0–2 | 37 / 0 | +7.2 | +7.2 |
+| Headline quality | 2–4 | 48 / 0 | +8.4 | +8.4 |
+| Headline quality | 4–6 | 14 / 1 | +3.2 | +3.2 |
+| Headline quality | 8–10 | 4 / 124 | −10.0 | 0 |
+| Language (bias) | 0–2 | 93 / 0 | +11.2 | +11.2 |
+| Language (bias) | 2–4 | 17 / 2 | +3.3 | +3.3 |
+| Language (bias) | 6–8 | 1 / 22 | −4.1 | 0 |
+| Language (bias) | 8–10 | 1 / 100 | −10.8 | 0 |
+| Persuasion technique | 2–4 | 106 / 38 | +3.8 | +3.8 |
+| Persuasion technique | 4–6 | 5 / 52 | −5.6 | 0 |
+| Persuasion technique | 8–10 | 0 / 21 | −3.7 | 0 |
+| Source transparency | 2–4 | 22 / 7 | +1.9 | +1.9 |
+| Source transparency | 8–10 | 26 / 82 | −2.8 | 0 |
+| Source reputation | all bands | 361 / 378 | 0 | 0 |
 
-Source reputation measures zero on this corpus because source identity is hidden
-to defeat its label leak; provenance enters through the prior instead.
-Transparency has 18 labelled examples, too few to estimate, and therefore
-contributes nothing rather than an assigned weight.
+Bands omitted from the table are those where the counts were too thin for the
+interval to exclude a ratio of one; each contributes exactly zero and is named
+as unmeasured in the report rather than receiving an assigned weight. Source
+reputation measures zero because source identity is hidden on this corpus to
+defeat its label leak; provenance enters through the prior instead.
 
-The style family is damped by 0.299 — four checks correlating at r = 0.78 are
-1.2 effective independent factors — and capped at 8 db in total.
+Transparency is newly measurable. On the previous corpus it had 18 labelled
+examples and contributed nothing; with 239 it separates the classes weakly but
+in the expected direction, and now carries a small admitted weight.
+
+The style family is damped by 0.379 — four checks correlating at a mean r = 0.55
+are 1.52 effective independent factors, not four — and capped at 8 db in total.
+The strongest pair is headline quality and language, at r = 0.93: on this corpus
+they are very nearly one observation reported twice, which is what the damping
+exists to prevent.
 
 **Declared, not measured.** The provenance priors (0.02 to 0.35 by publisher
 band), the five-way corroboration distribution, and the style cap are stated
