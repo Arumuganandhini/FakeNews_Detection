@@ -120,14 +120,19 @@ const CheckPage = () => {
   const active = MODES.find((m) => m.id === mode);
 
   return (
-    <div className="check-page">
-      <header className="check-header">
-        <h1>Check anything</h1>
-        <p>
-          Paste something you were sent and we will tell you whether it holds up —
-          or say plainly that there is nothing here we can check.
-        </p>
+    <div className="press-sheet press-sheet-narrow check-page">
+      <header className="press-masthead">
+        <div className="press-dateline">The Verification Desk</div>
+        <h1 className="press-name">Check Anything</h1>
+        <div className="press-tagline">
+          Paste it and we will tell you whether it holds up
+        </div>
       </header>
+
+      <p className="check-lede">
+        A link, a forwarded message, or a screenshot of a post. We will say
+        plainly whether it holds up — or that there is nothing here we can check.
+      </p>
 
       <form className="check-form" onSubmit={handleSubmit}>
         <div className="check-modes" role="tablist">
@@ -152,7 +157,7 @@ const CheckPage = () => {
 
         {mode === 'text' && (
           <textarea
-            className="check-textarea"
+            className="press-input check-textarea"
             rows={7}
             value={text}
             onChange={(e) => { setText(e.target.value); reset(); }}
@@ -162,7 +167,7 @@ const CheckPage = () => {
 
         {mode === 'link' && (
           <input
-            className="check-input"
+            className="press-input"
             type="url"
             value={url}
             onChange={(e) => { setUrl(e.target.value); reset(); }}
@@ -181,7 +186,7 @@ const CheckPage = () => {
 
         {mode !== 'link' && (
           <input
-            className="check-input check-account"
+            className="press-input check-account"
             type="text"
             value={account}
             onChange={(e) => setAccount(e.target.value)}
@@ -189,7 +194,7 @@ const CheckPage = () => {
           />
         )}
 
-        <button className="check-submit" type="submit" disabled={!ready() || loading}>
+        <button className="press-btn check-submit" type="submit" disabled={!ready() || loading}>
           {loading ? 'Checking…' : 'Check it'}
         </button>
       </form>

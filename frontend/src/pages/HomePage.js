@@ -1,13 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Link2, Search } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import api from '../services/api';
 import NewsCard from '../components/NewsCard';
 import '../styles/HomePage.css';
 
 const HomePage = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const [articles, setArticles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -152,28 +150,6 @@ const HomePage = () => {
         <div className="newspaper-tagline">All the News That's Fit to Print</div>
       </div>
       
-      {/* Most misinformation arrives as a forwarded link, not through a feed,
-          so checking one is offered before the day's headlines — but the Check
-          page is where that happens. This used to be a second link box that
-          did less: the Check page also takes pasted text and screenshots, and
-          refuses input that asserts nothing checkable. Two doors to the same
-          room, one of them narrower. */}
-      <section className="wire-desk">
-        <div className="wire-desk-intro">
-          <span className="wire-icon"><Link2 size={16} /></span>
-          <div>
-            <h2 className="wire-title">The Verification Desk</h2>
-            <p className="wire-strapline">
-              Sent a news link, a forwarded message or a screenshot? Submit it for checking.
-            </p>
-          </div>
-        </div>
-
-        <button type="button" className="wire-cta" onClick={() => navigate('/check')}>
-          <Search size={14} /> Check something
-        </button>
-      </section>
-
       <div className="newspaper-categories">
         <div className="category-label">SECTIONS:</div>
         <div className="categories-list">
