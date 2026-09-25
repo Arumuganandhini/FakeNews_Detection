@@ -24,11 +24,10 @@ const fabricated = {
   ]
 };
 
-// The working is its own panel now, a peer of the other two rather than
-// something nested inside them.
 const openWorking = () => {
   render(<TrustReport report={fabricated} />);
-  fireEvent.click(screen.getByRole('button', { name: /the full working/i }));
+  fireEvent.click(screen.getByRole('button', { name: /how do you know/i }));
+  fireEvent.click(screen.getByRole('button', { name: /show the full working/i }));
 };
 
 // The heart of the model is that nothing the author controls can speak in the
@@ -54,26 +53,4 @@ test('an overlap discount says it counts the writing checks for less', () => {
 test('a writing check that accuses still says so', () => {
   openWorking();
   expect(screen.getByText(/strongly suggests it is made up/i)).toBeInTheDocument();
-});
-
-// The working was printed twice: a ledger of what moved the answer, then a
-// second list of the same checks with the same numbers in different words.
-// "Who published it" appeared in both, which reads as the publisher being
-// counted twice.
-test('each check appears once in the working, not twice', () => {
-  openWorking();
-  expect(screen.getAllByText(/who published it/i)).toHaveLength(1);
-  expect(screen.getAllByText(/headline honesty/i)).toHaveLength(1);
-});
-
-// The three panels are peers; opening one closes the others rather than
-// stacking three open sections on top of each other.
-test('the panels are alternatives, not layers', () => {
-  render(<TrustReport report={fabricated} />);
-  fireEvent.click(screen.getByRole('button', { name: /how do you know/i }));
-  expect(screen.getByText(/what we found/i)).toBeInTheDocument();
-
-  fireEvent.click(screen.getByRole('button', { name: /the full working/i }));
-  expect(screen.getByText(/what changed the answer/i)).toBeInTheDocument();
-  expect(screen.queryByText(/what we found/i)).not.toBeInTheDocument();
 });

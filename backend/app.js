@@ -10,6 +10,7 @@ const authRoutes = require('./routes/authRoutes'); // New
 const trackingRoutes = require('./routes/trackingRoutes');
 const articleHistoryRoutes = require('./routes/articleHistory');
 const userRoutes = require('./routes/userRoutes');
+const articleFeedbackRoutes = require('./routes/articleFeedbackRoutes');
 
 // DB Connection
 const connectDB = require('./utils/db'); // New
@@ -69,6 +70,7 @@ app.use('/api/auth', authRoutes); // New
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/article-history', articleHistoryRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/article-feedback', articleFeedbackRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {

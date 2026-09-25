@@ -3,7 +3,6 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Newspaper, Columns2, ShieldCheck, LineChart, LogOut, LogIn, UserPlus
 } from 'lucide-react';
-import '../styles/ui.css';
 import '../styles/Navbar.css';
 
 const logoImg = '/logo.png';
@@ -77,7 +76,7 @@ const Navbar = ({ user, setUser }) => {
             >
               <LineChart size={15} /> Dashboard
             </Link>
-            <button onClick={handleLogout} className="pp-btn pp-btn--danger pp-btn--sm">
+            <button onClick={handleLogout} className="logout-btn">
               <LogOut size={15} /> Logout
             </button>
           </>
