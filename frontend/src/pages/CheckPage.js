@@ -120,7 +120,7 @@ const CheckPage = () => {
   const active = MODES.find((m) => m.id === mode);
 
   return (
-    <div className="press-sheet press-sheet-narrow check-page">
+    <div className="press-sheet check-page">
       <header className="press-masthead">
         <div className="press-dateline">The Verification Desk</div>
         <h1 className="press-name">Check Anything</h1>

@@ -14,12 +14,15 @@
    the upload control, and the refusal card.
    ========================================================================= */
 
-.check-page.press-sheet { max-width: 820px; }
+/* The sheet is the standard 1400px, like the front page, the comparison, the
+   article and the dashboard. It was 820px — press-sheet-narrow plus an override
+   — which left a band of bare desk down both sides that no other page has.
+   What needs a reading measure is the text inside it, not the paper. */
 
 /* A standfirst under the masthead, set as a newspaper would set one. */
 .check-lede {
-  max-width: 60ch;
-  margin: 0 auto 2rem;
+  max-width: 62ch;
+  margin: 0 auto 2.25rem;
   text-align: center;
   font-size: 1.02rem;
   line-height: 1.7;
@@ -32,9 +35,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  max-width: 660px;
+  max-width: 860px;
   margin: 0 auto 2rem;
-  padding: 1.25rem;
+  padding: 1.5rem 1.75rem;
   background: var(--paper-aged);
   border-top: 1px solid var(--rule-heavy);
   border-bottom: 1px solid var(--rule-heavy);
@@ -123,7 +126,7 @@
 /* ------------------------------------------------------------- The reply */
 
 .check-page .check-error {
-  max-width: 660px;
+  max-width: 860px;
   margin: 0 auto 1.5rem;
   padding: 1rem 1.2rem;
   color: var(--press-red);
@@ -135,9 +138,9 @@
 /* A refusal is a result, not a failure, so it is presented as one — set like
    a boxed editor's note rather than an error. */
 .check-page .check-refusal {
-  max-width: 660px;
+  max-width: 860px;
   margin: 0 auto 1.5rem;
-  padding: 1.5rem;
+  padding: 1.75rem;
   background: var(--paper-aged);
   border: 1px solid var(--rule-heavy);
   border-top: 4px double var(--ink);
@@ -167,9 +170,9 @@
 .check-page .check-missing li { margin-bottom: 0.25rem; }
 
 .check-page .check-result {
-  max-width: 720px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 1.75rem;
+  padding: 2rem;
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-top: 4px double var(--ink);
