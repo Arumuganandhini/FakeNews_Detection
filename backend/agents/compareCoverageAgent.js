@@ -31,13 +31,10 @@ const deriveKeywords = async (title) => {
 
 Give the search keywords another news website would use for the SAME story.
 
-Respond with ONLY a JSON object, no other text:
-{
-  "keywords": "<exactly 3 or 4 of the most distinctive words - names, places or events - most important first, no quotes, no punctuation>"
-}`;
+Return a JSON object with one key, "keywords": a string of exactly 3 or 4 of the most distinctive words — names, places or events — most important first, with no quotes and no punctuation.`;
 
   try {
-    const result = await callNimApiJson(prompt, { maxTokens: 120 });
+    const result = await callNimApiJson(prompt, { maxTokens: 120, requiredKeys: ['keywords'], label: 'coverage keywords' });
     const kw = String(result.keywords || '').trim();
     if (kw) return kw;
   } catch (err) {
@@ -66,20 +63,15 @@ const compareFraming = async (outlets) => {
 
 ${list}
 
-Compare the coverage. Respond with ONLY a JSON object, no other text:
-{
-  "topic": "<neutral description of the story in at most 12 words>",
-  "agreement": "<high | mixed | low>",
-  "shared_facts": ["<a fact reported by most or all outlets>"],
-  "differences": [
-    { "point": "<how the coverage differs in framing, emphasis or wording>", "outlets": ["<source name>"] }
-  ],
-  "summary": "<two sentences describing how the coverage differs across outlets>"
-}
-Report at most 3 shared facts and at most 3 differences. Base everything only on the text above.`;
+Compare the coverage. Return a JSON object with these keys:
+- "topic": a neutral description of the story in at most 12 words.
+- "agreement": one of high, mixed, low.
+- "shared_facts": an array of facts reported by most or all outlets, at most 3.
+- "differences": an array of at most 3 entries, each with "point" (how the coverage differs in framing, emphasis or wording) and "outlets" (an array of source names).
+- "summary": two sentences describing how the coverage differs across outlets. Base everything only on the text above.`;
 
   try {
-    const result = await callNimApiJson(prompt, { maxTokens: 900 });
+    const result = await callNimApiJson(prompt, { maxTokens: 900, requiredKeys: ['agreement'], label: 'coverage comparison' });
     return {
       topic: String(result.topic || ''),
       agreement: ['high', 'mixed', 'low'].includes(result.agreement) ? result.agreement : 'mixed',

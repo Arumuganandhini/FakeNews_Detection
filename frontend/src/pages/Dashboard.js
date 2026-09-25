@@ -6,12 +6,10 @@ import '../styles/Dashboard.css';
 const Dashboard = () => {
   const [articleHistory, setArticleHistory] = useState([]);
   const [verdicts, setVerdicts] = useState([]);
-  const [feedbackHistory, setFeedbackHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [showArticleHistory, setShowArticleHistory] = useState(true);
-  const [showFeedbackHistory, setShowFeedbackHistory] = useState(true);
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState('');
   const navigate = useNavigate();
@@ -52,16 +50,6 @@ const Dashboard = () => {
     }
   }, []);
 
-  const fetchFeedbackHistory = useCallback(async () => {
-    try {
-      const response = await api.get('/article-feedback/history/all');
-      setFeedbackHistory(response.data.data || []);
-    } catch (err) {
-      console.error('Error fetching feedback history:', err);
-      setError('Failed to load feedback history');
-    }
-  }, []);
-
   const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -69,7 +57,6 @@ const Dashboard = () => {
       await Promise.all([
         fetchUserProfile(),
         fetchArticleHistory(),
-        fetchFeedbackHistory(),
       ]);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -77,7 +64,7 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchUserProfile, fetchArticleHistory, fetchFeedbackHistory]);
+  }, [fetchUserProfile, fetchArticleHistory]);
 
   useEffect(() => {
     fetchAllData();
@@ -86,7 +73,6 @@ const Dashboard = () => {
     return () => {
       setArticleHistory([]);
       setVerdicts([]);
-      setFeedbackHistory([]);
       setUserProfile(null);
     };
   }, [fetchAllData]);
@@ -131,15 +117,6 @@ const Dashboard = () => {
       .filter(Boolean)
       .sort((a, b) => new Date(b) - new Date(a))[0];
 
-    const averageRating =
-      feedbackHistory.length > 0
-        ? Math.round(
-            (feedbackHistory.reduce((sum, f) => sum + (f.rating || 0), 0) /
-              feedbackHistory.length) *
-              10
-          ) / 10
-        : 0;
-
     // Tally of what the checks concluded, over the articles that have been
     // checked. Articles with no cached verdict are excluded rather than counted
     // as anything — an unchecked article is not a clean one.
@@ -159,10 +136,8 @@ const Dashboard = () => {
       callFake: calls.FAKE || 0,
       callUnverified: calls['CANNOT VERIFY'] || 0,
       callOther: verdicts.length - ((calls.REAL || 0) + (calls.FAKE || 0) + (calls['CANNOT VERIFY'] || 0)),
-      totalFeedback: feedbackHistory.length,
-      averageRating,
     };
-  }, [articleHistory, verdicts, feedbackHistory]);
+  }, [articleHistory, verdicts]);
 
   const handleNameEdit = () => {
     setIsEditingName(true);
@@ -306,12 +281,6 @@ const Dashboard = () => {
                     <dt>Last read</dt>
                     <dd>{stats.lastRead ? formatDate(stats.lastRead) : 'Never'}</dd>
                   </div>
-                  <div className="newspaper-glance-row">
-                    <dt>Rating given</dt>
-                    <dd>
-                      {stats.totalFeedback ? `${stats.averageRating} out of 5` : 'No reviews yet'}
-                    </dd>
-                  </div>
                 </dl>
                 <button className="newspaper-btn newspaper-glance-btn" onClick={() => navigate('/home')}>
                   Read something new
@@ -379,63 +348,6 @@ const Dashboard = () => {
                 )}
               </div>
 
-              <div className="newspaper-section">
-                <div className="newspaper-section-header">
-                  <h2 className="newspaper-section-title">Reader&apos;s opinions</h2>
-                  <span className="newspaper-section-byline">
-                    {stats.totalFeedback} {stats.totalFeedback === 1 ? 'review' : 'reviews'}
-                    {stats.totalFeedback > 0 ? ` · ${stats.averageRating} average` : ''}
-                  </span>
-                  <button
-                    className="newspaper-toggle-btn"
-                    onClick={() => setShowFeedbackHistory(!showFeedbackHistory)}
-                    aria-expanded={showFeedbackHistory}
-                  >
-                    {showFeedbackHistory ? 'Collapse' : 'Expand'}
-                  </button>
-                </div>
-
-                {showFeedbackHistory && (
-                  <div className="newspaper-expanded-content">
-                    {feedbackHistory.length > 0 ? (
-                      <div className="newspaper-grid">
-                        {feedbackHistory.map((item) => (
-                          <div key={item._id} className="newspaper-feedback-card">
-                            <div className="newspaper-card-header">
-                              <h3 className="newspaper-feedback-title">
-                                {item.articleTitle || 'Article review'}
-                              </h3>
-                              <div className="newspaper-rating">
-                                <span className="newspaper-stars">
-                                  {'★'.repeat(item.rating) + '☆'.repeat(5 - item.rating)}
-                                </span>
-                                <span className="newspaper-rating-value">{item.rating}/5</span>
-                              </div>
-                            </div>
-                            <div className="newspaper-card-content">
-                              {item.feedback && (
-                                <p className="newspaper-feedback-text">{item.feedback}</p>
-                              )}
-                              <div className="newspaper-article-details">
-                                <span className="newspaper-feedback-date">
-                                  {formatDate(item.createdAt)}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="newspaper-empty-state">
-                        <p>You haven&apos;t reviewed an article yet.</p>
-                        <button className="newspaper-btn" onClick={() => navigate('/home')}>
-                          Find an article to review
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </>

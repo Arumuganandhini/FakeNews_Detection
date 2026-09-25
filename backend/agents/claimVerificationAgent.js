@@ -29,15 +29,9 @@ const extractClaims = async (title, content, maxClaims = 2, language = null) => 
 Title: ${title}
 Content: ${(content || '').slice(0, 2000)}
 
-Respond with ONLY a JSON object, no other text:
-{
-  "claims": [
-    {
-      "claim": "<the factual claim in one sentence>",
+Return a JSON object with one key, "claims": an array of at most ${maxClaims} entries, empty when the article contains nothing checkable. Each entry has:
+- "claim": the factual claim in one sentence.
 ${keywordFields}
-    }
-  ]
-}
 Return at most ${maxClaims} claims. If the article contains no checkable claims, return an empty array.${isForeign ? `\nWrite "claim" in English so the verdict can be explained to the reader, but keep "search_keywords" in ${language.name}.` : ''}`;
 
   // Without requiredKeys, any valid JSON lacking a `claims` key silently
@@ -82,13 +76,11 @@ Claim: "${claim}"
 Coverage from other news outlets:
 ${evidenceText}
 
-Respond with ONLY a JSON object, no other text:
-{
-  "verdict": "<supported | contradicted | unverified>",
-  "supporting_indices": [<numbers of coverage items that clearly report the same fact>],
-  "contradicting_indices": [<numbers of coverage items that clearly report conflicting facts>],
-  "explanation": "<one sentence>"
-}
+Return a JSON object with these keys:
+- "verdict": one of supported, contradicted, unverified.
+- "supporting_indices": an array of the numbers of coverage items that clearly report the same fact.
+- "contradicting_indices": an array of the numbers of coverage items that clearly report conflicting facts.
+- "explanation": one sentence.
 Use "supported" only if at least one item clearly reports the same fact. Use "contradicted" if any item reports conflicting facts. Otherwise "unverified".`;
 
   // A model that could not be reached, or whose reply could not be parsed,

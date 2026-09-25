@@ -17,6 +17,11 @@ const BIAS_TYPES =['political bias', 'emotional manipulation', 'loaded language'
 const analyzeBias = async (title, content, language) => {
   const text = `${title}. ${content || ''}`.slice(0, 3000);
 
+
+  // Keys described, not drawn — see the note in manipulationAgent.js:
+  // under constrained JSON decoding a placeholder template is itself a
+  // valid completion, and these agents were returning objects with the
+  // required key missing.
   const prompt = `You are a media bias analysis system. Analyze this news text for bias and emotionally manipulative language.
 
 Text:
@@ -27,15 +32,11 @@ ${text}
 Look for: ${BIAS_TYPES.join(', ')}.
 Quote flagged sentences EXACTLY as they appear in the text. Only flag sentences that genuinely show bias — a neutral article should have an empty list.
 
-Respond with ONLY a JSON object, no other text:
-{
-  "bias_score": <number 0-10, where 0 = fully neutral and objective, 10 = extremely biased>,
-  "political_lean": "<left | center | right | none-detected>",
-  "flagged_sentences": [
-    { "sentence": "<exact quote from the text>", "type": "<one of: ${BIAS_TYPES.join(' | ')}>", "reason": "<short reason>" }
-  ],
-  "explanation": "<1-2 sentences summarizing the overall tone and objectivity>"
-}` + languageDirective(language);
+Return a JSON object with these keys:
+- "bias_score": a number from 0 to 10, where 0 is fully neutral and objective and 10 is extremely biased.
+- "political_lean": one of left, center, right, none-detected.
+- "flagged_sentences": an array, empty when nothing stands out. Each entry has "sentence" (the exact quote), "type" (one of: ${BIAS_TYPES.join(', ')}) and "reason" (short).
+- "explanation": one or two sentences summarising the overall tone and objectivity.` + languageDirective(language);
 
   try {
     const result = await callNimApiJson(prompt, { maxTokens: 700, requiredKeys: ['bias_score'], label: 'bias' });

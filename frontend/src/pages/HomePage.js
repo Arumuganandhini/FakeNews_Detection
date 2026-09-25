@@ -16,10 +16,6 @@ const HomePage = () => {
   const [selectedCategory, setSelectedCategory] = useState('general');
   const [currentDate] = useState(new Date());
   const [trustBadges, setTrustBadges] = useState({});
-  const [linkInput, setLinkInput] = useState('');
-  const [checkingLink, setCheckingLink] = useState(false);
-  const [linkError, setLinkError] = useState('');
-  const [linkPartial, setLinkPartial] = useState(null);
 
   // Get category from URL query parameter
   useEffect(() => {
@@ -95,48 +91,6 @@ const HomePage = () => {
     return () => { cancelled = true; };
   }, [articles]);
 
-  // Read a pasted link, then hand it to the article page so it gets exactly
-  // the same treatment as anything from our own feed.
-  //
-  // A video or a social post is not an article and must not go down this path.
-  // The article reader will happily "succeed" on a YouTube link and return the
-  // 160 characters around the player — no transcript, no claims, and a verdict
-  // built on nothing. The Check page reads those properly, so they are sent
-  // there instead of being quietly mishandled here.
-  const PLATFORM_HOSTS = /(^|\.)(youtube\.com|youtu\.be|instagram\.com|twitter\.com|x\.com|facebook\.com|fb\.watch|tiktok\.com|t\.me|telegram\.me)$/i;
-
-  const isPlatformLink = (value) => {
-    try {
-      return PLATFORM_HOSTS.test(new URL(value).hostname);
-    } catch (_) {
-      return false;
-    }
-  };
-
-  const handleCheckLink = async (e) => {
-    e.preventDefault();
-    const url = linkInput.trim();
-    if (!url) return;
-
-    if (isPlatformLink(url)) {
-      navigate('/check', { state: { url } });
-      return;
-    }
-
-    setCheckingLink(true);
-    setLinkError('');
-    setLinkPartial(null);
-    try {
-      const res = await api.post('/ai/extract-article', { url });
-      navigate('/article', { state: { article: res.data.article, startTime: Date.now() } });
-    } catch (err) {
-      setLinkError(err.response?.data?.error || 'We could not check that link. Please try another one.');
-      setLinkPartial(err.response?.data?.partial || null);
-    } finally {
-      setCheckingLink(false);
-    }
-  };
-
   const handleRetry = () => {
     window.location.reload();
   };
@@ -198,39 +152,26 @@ const HomePage = () => {
         <div className="newspaper-tagline">All the News That's Fit to Print</div>
       </div>
       
-      {/* Most misinformation arrives as a forwarded link, not through a feed —
-          so checking one is offered before the day's headlines. */}
+      {/* Most misinformation arrives as a forwarded link, not through a feed,
+          so checking one is offered before the day's headlines — but the Check
+          page is where that happens. This used to be a second link box that
+          did less: the Check page also takes pasted text and screenshots, and
+          refuses input that asserts nothing checkable. Two doors to the same
+          room, one of them narrower. */}
       <section className="wire-desk">
         <div className="wire-desk-intro">
           <span className="wire-icon"><Link2 size={16} /></span>
           <div>
             <h2 className="wire-title">The Verification Desk</h2>
             <p className="wire-strapline">
-              Sent a news link on WhatsApp or social media? Submit it for checking.
+              Sent a news link, a forwarded message or a screenshot? Submit it for checking.
             </p>
           </div>
         </div>
 
-        <form className="wire-form" onSubmit={handleCheckLink}>
-          <input
-            type="url"
-            value={linkInput}
-            onChange={(e) => setLinkInput(e.target.value)}
-            placeholder="https://example.com/news-article"
-            aria-label="Paste a news link to check"
-            disabled={checkingLink}
-          />
-          <button type="submit" disabled={checkingLink || !linkInput.trim()}>
-            <Search size={14} /> {checkingLink ? 'Reading…' : 'Check it'}
-          </button>
-        </form>
-
-        {linkError && (
-          <div className="wire-notice">
-            <strong>{linkError}</strong>
-            {linkPartial && <span className="wire-partial">{linkPartial.note}</span>}
-          </div>
-        )}
+        <button type="button" className="wire-cta" onClick={() => navigate('/check')}>
+          <Search size={14} /> Check something
+        </button>
       </section>
 
       <div className="newspaper-categories">

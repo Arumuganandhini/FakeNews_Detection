@@ -53,6 +53,16 @@ const assessTransparency = async (title, content, language) => {
     .map(c => `- ${c.id}: ${c.help}`)
     .join('\n');
 
+
+  // The keys are DESCRIBED, not drawn as a template.
+  //
+  // Under constrained JSON decoding a placeholder schema is itself a valid
+  // completion: given the object already written out with every slot a
+  // "<placeholder>", the model can close it and stop. Measured on the summary
+  // agent, that produced a bare `{}` on every attempt; here it produced JSON
+  // with no `techniques` key, which the gateway correctly rejected and the
+  // evaluation then had to abort the article over. Asked in words for an
+  // object with named keys, the same model answers correctly.
   const prompt = `You are a journalism standards analyst. Judge how VERIFIABLE this news text is — whether a reader could go and check what it says. Judge only what is present in the text, not whether the story sounds true.
 
 Text:
@@ -67,19 +77,11 @@ Also list any vague or unattributable phrases the article relies on, such as "ex
 
 Note: news APIs often truncate article text. Judge only the portion shown, and do not penalise the article for ending abruptly.
 
-Respond with ONLY a JSON object, no other text:
-{
-  "checks": {
-    "namedSources": <true|false>,
-    "directQuotes": <true|false>,
-    "primaryEvidence": <true|false>,
-    "specificDetail": <true|false>,
-    "measuredClaims": <true|false>
-  },
-  "named_examples": ["<a person or organisation the article actually names, if any>"],
-  "vague_attributions": ["<exact quote of a vague attribution>"],
-  "summary": "<one sentence on how checkable this reporting is>"
-}` + languageDirective(language);
+Return a JSON object with these keys:
+- "checks": an object whose keys are namedSources, directQuotes, primaryEvidence, specificDetail and measuredClaims, each set to true or false.
+- "named_examples": an array of people or organisations the article actually names, empty if it names none.
+- "vague_attributions": an array of exact quotes of vague attributions, empty if there are none.
+- "summary": one sentence on how checkable this reporting is.` + languageDirective(language);
 
   try {
     const result = await callNimApiJson(prompt, { maxTokens: 900, requiredKeys: ['checks'], label: 'transparency' });

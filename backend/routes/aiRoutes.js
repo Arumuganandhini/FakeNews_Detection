@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 
 const summarizeArticle = require('../agents/summarizeAgent');
-const checkCredibility = require('../agents/credibilityAgent');
 const generateDetailedSummary = require('../agents/detailedSummaryAgent');
 const { analyzeTrust, REPORT_SCHEMA_VERSION } = require('../agents/trustAnalysisAgent');
 
@@ -18,6 +17,58 @@ const { resolveArticleText, limitText, TEXT_BUDGET, fingerprintText } = require(
 const TrustReportCache = require('../models/TrustReportCache');
 const SummaryCache = require('../models/SummaryCache');
 const auth = require('../middleware/auth');
+
+/**
+ * Is this report a result, or a record of our own failure?
+ *
+ * A trust report was stored whatever it said, for fourteen days. So an
+ * analysis that ran while the model was rate-limited — every check falling
+ * back to the pattern matcher, the corroboration search never completing —
+ * was written down as the answer for that article, and every later reader was
+ * served it instantly. The one time the pipeline could not do its job became
+ * the permanent verdict, and re-opening the article could not dislodge it
+ * because re-opening the article is exactly what hits the cache. Sixteen of
+ * the seventeen reports in the local cache were records of a failure.
+ *
+ * Only a report built on checks that actually ran is worth keeping.
+ */
+const isCompleteReport = (report) => {
+  if (!report) return false;
+  // The corroboration check could not be carried out at all.
+  if (report.decision?.rule === 'verification-unavailable') return false;
+  // One or more content checks fell back to word patterns.
+  if (report.degradedFactors?.length > 0) return false;
+  return true;
+};
+
+/**
+ * Store a report, unless it is a record of a failure or about different text.
+ *
+ * The fingerprint is the same idea as the summary cache: a URL is not a stable
+ * name for a piece of writing, so an entry records the text it was built from
+ * and a rewritten story does not reuse the old verdict.
+ */
+const cacheTrustReport = async ({ url, title, source, report, sourcePrint }) => {
+  if (!url) return;
+  if (!isCompleteReport(report)) {
+    console.log(`Not caching an incomplete report for ${url} (${report?.decision?.rule || 'unknown rule'}).`);
+    return;
+  }
+  // Awaited, not fire-and-forget. Responding first left a window where a
+  // reader who refreshed immediately missed the cache and paid for a second
+  // full analysis. A write failure is still never fatal.
+  await TrustReportCache.updateOne(
+    { articleUrl: url },
+    { $set: { articleUrl: url, title, source, report, sourcePrint, createdAt: new Date() } },
+    { upsert: true }
+  ).catch(err => console.error('Trust cache write failed:', err.message));
+};
+
+/** Is a stored report still about the article in front of us? */
+const isUsableCachedReport = (cached, sourcePrint) =>
+  Boolean(cached)
+  && isCurrent(cached.report)
+  && (!cached.sourcePrint || cached.sourcePrint === sourcePrint);
 
 // When a reader double-clicks, opens the same story in two tabs, or two feed
 // cards request the same report together, run one analysis and share its
@@ -120,15 +171,9 @@ router.post('/summarize', async (req, res) => {
   }
 });
 
-router.post('/credibility', async (req, res) => {
-  const { title, content, source } = req.body;
-  try {
-    const { score, reasoning } = await checkCredibility(title, content, source);
-    res.json({ score, reasoning }); // Send flat { score, reasoning }
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to check credibility.' });
-  }
-});
+// agents/credibilityAgent.js has no route. It is the single-prompt baseline
+// the evaluation compares the pipeline against (see eval/runEval.js), not a
+// feature — it was reachable over HTTP and nothing called it.
 
 // Full explainable trust analysis: source reputation + clickbait + bias +
 // cross-source claim verification, aggregated into a weighted trust score.
@@ -139,12 +184,16 @@ router.post('/trust-analysis', async (req, res) => {
   if (!title) {
     return res.status(400).json({ error: 'Article title is required.' });
   }
+  // What the caller is asking about, so a cached verdict written about a
+  // different version of this page is not reused.
+  const sourcePrint = fingerprintText(sanitizeContent(content) || title);
   try {
     if (url) {
       const cached = await TrustReportCache.findOne({ articleUrl: url }).lean();
       // A report from an older pipeline is missing factors this one reports,
-      // so re-analyse rather than showing an outdated breakdown.
-      if (cached && isCurrent(cached.report)) {
+      // and one written about text the publisher has since replaced is about a
+      // different article. Either way, re-analyse.
+      if (isUsableCachedReport(cached, sourcePrint)) {
         return res.json({ ...cached.report, cached: true });
       }
     }
@@ -174,17 +223,7 @@ router.post('/trust-analysis', async (req, res) => {
     }
     const report = await job;
 
-    if (url) {
-      // Awaited, not fire-and-forget. Responding first left a window where a
-      // reader who refreshed immediately missed the cache and paid for a second
-      // full analysis. The upsert costs a few milliseconds against an analysis
-      // measured in seconds. A write failure is still never fatal.
-      await TrustReportCache.updateOne(
-        { articleUrl: url },
-        { $set: { articleUrl: url, title, source, report, createdAt: new Date() } },
-        { upsert: true }
-      ).catch(err => console.error('Trust cache write failed:', err.message));
-    }
+    await cacheTrustReport({ url, title, source, report, sourcePrint });
 
     res.json({ ...report, cached: false });
   } catch (err) {
@@ -323,6 +362,7 @@ router.post('/trust-analysis/stream', async (req, res) => {
   if (!title) {
     return res.status(400).json({ error: 'Article title is required.' });
   }
+  const sourcePrint = fingerprintText(sanitizeContent(content) || title);
 
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -342,7 +382,7 @@ router.post('/trust-analysis/stream', async (req, res) => {
   try {
     if (url) {
       const cached = await TrustReportCache.findOne({ articleUrl: url }).lean();
-      if (cached && isCurrent(cached.report)) {
+      if (isUsableCachedReport(cached, sourcePrint)) {
         emit({ type: 'report', report: { ...cached.report, cached: true } });
         return res.end();
       }
@@ -362,13 +402,7 @@ router.post('/trust-analysis/stream', async (req, res) => {
       onProgress: (step) => emit({ type: 'progress', ...step })
     });
 
-    if (url) {
-      await TrustReportCache.updateOne(
-        { articleUrl: url },
-        { $set: { articleUrl: url, title, source, report, createdAt: new Date() } },
-        { upsert: true }
-      ).catch(err => console.error('Trust cache write failed:', err.message));
-    }
+    await cacheTrustReport({ url, title, source, report, sourcePrint });
 
     emit({ type: 'report', report: { ...report, cached: false } });
     res.end();

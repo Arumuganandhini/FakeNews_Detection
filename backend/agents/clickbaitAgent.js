@@ -12,6 +12,11 @@ const { clickbaitByRules } = require('./heuristics');
  *          score is 0-10 where 10 = completely straightforward headline, 0 = extreme clickbait.
  */
 const analyzeClickbait = async (title, language) => {
+
+  // Keys described, not drawn — see the note in manipulationAgent.js:
+  // under constrained JSON decoding a placeholder template is itself a
+  // valid completion, and these agents were returning objects with the
+  // required key missing.
   const prompt = `You are a headline analysis system. Analyze this news headline for clickbait characteristics.
 
 Headline: "${title}"
@@ -25,12 +30,10 @@ Clickbait signals to check for:
 - Emotional manipulation or fear-mongering
 - Unsubstantiated superlatives ("best ever", "worst in history")
 
-Respond with ONLY a JSON object, no other text:
-{
-  "clickbait_score": <number 0-10, where 0 = not clickbait at all and 10 = extreme clickbait>,
-  "signals": [<array of short strings naming each signal actually present, empty array if none>],
-  "explanation": "<one sentence explaining the assessment>"
-}` + languageDirective(language);
+Return a JSON object with these keys:
+- "clickbait_score": a number from 0 to 10, where 0 is not clickbait at all and 10 is extreme clickbait.
+- "signals": an array of short strings naming each signal actually present, empty when there are none.
+- "explanation": one sentence explaining the assessment.` + languageDirective(language);
 
   try {
     const result = await callNimApiJson(prompt, { maxTokens: 450, requiredKeys: ['clickbait_score'], label: 'clickbait' });

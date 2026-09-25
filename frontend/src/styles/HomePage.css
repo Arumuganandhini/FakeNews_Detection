@@ -638,3 +638,27 @@
 .newspaper-container .wire-partial { color: var(--ink-soft); font-style: italic; }
 @media (max-width: 700px) {.newspaper-container .wire-desk { margin-inline: 1rem; padding: 1rem; }.newspaper-container .wire-form { flex-direction: column; }.newspaper-container .wire-form button { width: 100%; justify-content: center; }
 }
+
+/* The desk now sends the reader to the Check page rather than carrying its own
+   narrower copy of it. The button inherits what the old submit button wore. */
+.wire-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--label-font, 'Playfair Display', Georgia, serif);
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.7rem 1.4rem;
+  border: 1px solid var(--ink, #14140f);
+  border-radius: 2px;
+  background: var(--ink, #14140f);
+  color: var(--paper, #fefdfa);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.wire-cta:hover {
+  background: var(--accent, #264653);
+  border-color: var(--accent, #264653);
+}

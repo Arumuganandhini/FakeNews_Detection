@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import FeedbackModal from '../components/FeedbackModal';
 import TrustReport from '../components/TrustReport';
 import '../styles/ArticlePage.css';
 
@@ -81,18 +80,11 @@ const ArticlePage = () => {
   // The six checks, filled in as the server reports each one finishing. The
   // reader watches the report being built instead of waiting on a spinner.
   const [completedChecks, setCompletedChecks] = useState([]);
-  const [articleFeedbacks, setArticleFeedbacks] = useState([]);
-  // A list that failed to load is not an empty list. Without this the page
-  // tells the reader "no feedbacks yet" whenever the request fails, which is
-  // a claim about other readers built out of our own error.
-  const [feedbacksFailed, setFeedbacksFailed] = useState(false);
   const [loadingStates, setLoadingStates] = useState({
     summary: true,
     detailedSummary: false,
-    credibility: true,
-    articleFeedbacks: true
+    credibility: true
   });
-  const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState('');
 
@@ -272,108 +264,8 @@ const ArticlePage = () => {
     }
   }, [article, isAuthenticated]);
 
-  const fetchArticleFeedbacks = useCallback(async () => {
-    if (!article) return;
-    try {
-      const response = await axios.get(`${BASE_URL}/api/article-feedback/all/${encodeURIComponent(article.url)}`);
-      setArticleFeedbacks(response.data.data || []);
-      setFeedbacksFailed(false);
-    } catch (error) {
-      console.error('Error fetching article feedbacks:', error);
-      setFeedbacksFailed(true);
-    } finally {
-      setLoadingStates(prev => ({ ...prev, articleFeedbacks: false }));
-    }
-  }, [article]);
-
-  useEffect(() => {
-    fetchArticleFeedbacks();
-  }, [fetchArticleFeedbacks]);
-
-  const handleShowFullFeedback = () => {
-    setShowModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-  };
-
-  const handleSubmitFeedback = async (userFeedback) => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('Please login to submit feedback');
-        return;
-      }
-
-      // Submit feedback to the backend
-      await axios.post(
-        `${BASE_URL}/api/article-feedback/submit`,
-        {
-          articleId: article.url,
-          feedback: userFeedback.feedback,
-          rating: userFeedback.rating
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
-      setShowModal(false);
-
-      // Confirm inline and refresh the list, so the reader sees their own view
-      // appear rather than being interrupted by a browser dialog.
-      setNotice('Thanks — your view has been added below.');
-      setTimeout(() => setNotice(''), 5000);
-      fetchArticleFeedbacks();
-
-    } catch (error) {
-      console.error('Error submitting feedback:', error);
-      setError('We could not save your view. Please try again.');
-    }
-  };
-
   const handleDetailedSummary = () => {
     analyze('detailedSummary');
-  };
-
-  const renderArticleFeedbacks = () => {
-    if (loadingStates.articleFeedbacks) {
-      return (
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Loading feedbacks...</p>
-        </div>
-      );
-    }
-
-    if (feedbacksFailed) {
-      return <p className="no-feedbacks">We could not load what other readers said. Try again in a moment.</p>;
-    }
-
-    if (articleFeedbacks.length === 0) {
-      return <p className="no-feedbacks">No feedbacks yet. Be the first to share your thoughts!</p>;
-    }
-
-    return (
-      <div className="article-feedbacks">
-        {articleFeedbacks.map((feedback) => (
-          <div key={feedback._id} className="feedback-item">
-            <div className="feedback-header">
-              {/* A display name, never the address someone signed up with. */}
-              <span className="feedback-user">{feedback.userId?.name || 'A reader'}</span>
-              <span className="feedback-date">
-                {new Date(feedback.createdAt).toLocaleDateString()}
-              </span>
-            </div>
-            <div className="feedback-rating">
-              {'★'.repeat(feedback.rating)}{'☆'.repeat(5 - feedback.rating)}
-            </div>
-            <p className="feedback-text">{feedback.feedback}</p>
-          </div>
-        ))}
-      </div>
-    );
   };
 
   if (!article) {
@@ -494,9 +386,8 @@ const ArticlePage = () => {
       </div>
 
       <div className="article-bottom-section">
-        {/* The summary and the reader feedback share the left column. They
-            were previously separate grid items, which tied their heights to
-            the report beside them and left a large gap under the summary. */}
+        {/* The summary column. Reader comments used to share it; they have
+            been removed, so this is the summary alone. */}
         <div className="article-left-column">
           <div className="summary-section">
             <h2>Summary</h2>
@@ -537,26 +428,11 @@ const ArticlePage = () => {
             )}
           </div>
 
-          <div className="article-feedbacks-section">
-            <div className="feedbacks-header">
-              <h3 className="feedback-title">What readers think</h3>
-              <button className="feedback-button" onClick={handleShowFullFeedback}>
-                Share your view
-              </button>
-            </div>
-            {renderArticleFeedbacks()}
-          </div>
         </div>
 
         </div>
       </div>
 
-      {showModal && (
-        <FeedbackModal
-          onSubmit={handleSubmitFeedback}
-          onClose={handleCloseModal}
-        />
-      )}
     </div>
   );
 };

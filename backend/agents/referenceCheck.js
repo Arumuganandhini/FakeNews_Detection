@@ -228,12 +228,10 @@ Text: ${String(content || '').slice(0, 900)}
 
 The encyclopedia will not mention most of what the article says. That is normal and is NOT a contradiction. Answer "contradicts": true ONLY if the entry states something that directly conflicts with a fact the article asserts about ${entity} — for example a different office holder, a different date, a different organisation.
 
-Respond with ONLY a JSON object:
-{
-  "contradicts": <true or false>,
-  "article_states": "<what the article says about ${entity}, in one short sentence>",
-  "reference_states": "<the conflicting sentence copied exactly from the encyclopedia entry, or empty if there is no conflict>"
-}`;
+Return a JSON object with these keys:
+- "contradicts": true or false.
+- "article_states": what the article says about ${entity}, in one short sentence.
+- "reference_states": the conflicting sentence copied exactly from the encyclopedia entry, or an empty string when there is no conflict.`;
 
   try {
     const result = await callNimApiJson(prompt, { maxTokens: 400, requiredKeys: ['contradicts'], label: 'premise check' });

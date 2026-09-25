@@ -49,6 +49,16 @@ const detectManipulation = async (title, content, language) => {
     .map(name => `- ${name}: ${TECHNIQUES[name]}`)
     .join('\n');
 
+
+  // The keys are DESCRIBED, not drawn as a template.
+  //
+  // Under constrained JSON decoding a placeholder schema is itself a valid
+  // completion: given the object already written out with every slot a
+  // "<placeholder>", the model can close it and stop. Measured on the summary
+  // agent, that produced a bare `{}` on every attempt; here it produced JSON
+  // with no `techniques` key, which the gateway correctly rejected and the
+  // evaluation then had to abort the article over. Asked in words for an
+  // object with named keys, the same model answers correctly.
   const prompt = `You are a propaganda-technique analyst. Identify persuasion techniques used in this news text.
 
 Text:
@@ -64,18 +74,10 @@ Rules:
 - Only report a technique when it is clearly present. Straightforward factual reporting uses none, and an empty list is the correct answer for such an article.
 - Report each distinct instance once. At most 3, the clearest ones.
 
-Respond with ONLY a JSON object, no other text:
-{
-  "intensity": "<none | light | moderate | heavy>",
-  "techniques": [
-    {
-      "technique": "<one of: ${TECHNIQUE_NAMES.join(' | ')}>",
-      "quote": "<exact text from the article>",
-      "effect": "<one short sentence on what this does to the reader>"
-    }
-  ],
-  "summary": "<one sentence describing how the article addresses its reader>"
-}` + languageDirective(language);
+Return a JSON object with these keys:
+- "intensity": one of none, light, moderate, heavy.
+- "techniques": an array, empty when the article uses none. Each entry has "technique" (one of: ${TECHNIQUE_NAMES.join(', ')}), "quote" (the exact wording from the article) and "effect" (one short sentence on what it does to the reader).
+- "summary": one sentence describing how the article addresses its reader.` + languageDirective(language);
 
   try {
     // Budget trimmed from 1400: this was the slowest factor in the pipeline at
