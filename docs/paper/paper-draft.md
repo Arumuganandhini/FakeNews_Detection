@@ -26,11 +26,11 @@ additive log-odds into a calibrated probability. Support is admitted only from
 outside the author's control: corroboration counted in independent sources
 rather than retrieved articles, and premises checked against a reference work.
 Input carrying no verifiable claim is declined rather than scored. On a
-held-out split of 120 articles the model matches the rule it replaces on
-accuracy — 114 correct against 115 — and ranks slightly worse, while
-calibration error where the system accuses falls twentyfold, from 0.267 to
-0.013. The trade is deliberate: the discrimination given up is supplied by
-evidence an adversary controls.*
+held-out split of 120 articles the deployed model matches the rule it replaces
+on accuracy — 114 correct against 115 — ranks worse (AUC 0.951 against 0.978),
+and reduces calibration error where it accuses from 0.267 to 0.152. The trade is
+deliberate: the discrimination given up is supplied by evidence an adversary
+controls.*
 
 **Index Terms** — Adversarial evidence, fake news detection, likelihood ratio,
 probability calibration, selective prediction, source independence, weight of
@@ -522,7 +522,8 @@ n = 120 held-out articles:
 |---|---|---|---|---|---|---|
 | Legacy sum | 0.958 | 0.978 | 0.237 | 0.267 | 0.968 | 0.101 |
 | WoE, raw | 0.950 | 0.973 | 0.308 | 0.257 | 0.967 | 0.142 |
-| WoE, isotonic | 0.950 | 0.957 | 0.028 | 0.013 | 0.967 | 0.048 |
+| WoE, isotonic, clamp not re-applied | 0.950 | 0.957 | 0.028 | 0.013 | 0.967 | 0.048 |
+| **WoE, as deployed** | **0.950** | **0.951** | **0.246** | **0.152** | **0.967** | **0.117** |
 
 ECE-a and Prec-a are expected calibration error and precision computed over the
 predictions where the system accuses, that is where it states a probability of
@@ -533,15 +534,23 @@ and precision.
 draw no conclusion from it, and the earlier claim that accuracy rose from 0.888
 to 0.954 does not survive the clean re-estimation: it was measured on the
 contaminated corpus and is withdrawn. On ISOT the two models classify
-equivalently, and the legacy rule ranks slightly better (AUC 0.978 against
-0.957).
+equivalently, and the legacy rule ranks better (AUC 0.978 against 0.951 for the
+model as deployed).
 
-What does separate them is calibration, by a factor of twenty where it matters
-most. Where the system accuses — which is where a false statement does harm —
-expected calibration error falls from 0.267 to 0.013, and the Brier score from
-0.101 to 0.048. A hand-weighted sum that is right about which articles are
-fabricated can still be badly wrong about how sure it is; the reader sees the
-confidence, not the ranking.
+What separates them is calibration where the system accuses — which is where a
+false statement does harm. As deployed, expected calibration error on
+accusations falls from 0.267 to 0.152. The isotonic row reaches 0.013, but only
+because its map is free to move articles toward "genuine" on clean style, which
+the admissibility rule forbids; Section 5 re-applies the rule after calibration,
+and the deployed row is the result of doing so. Overall calibration does not
+improve (ECE 0.246 against 0.237; Brier 0.117 against 0.101), for a reason the
+reliability table shows directly: the 59 held-out articles in the lowest band
+are stated at 0.41 — the prior — and observed fabricated at 0.07. On ISOT the
+only exculpatory evidence is style, so the deployed model declines to exonerate
+anything; exoneration is left to corroboration and provenance, neither of which
+this corpus can exercise. A hand-weighted sum that is right about which articles
+are fabricated can still be badly wrong about how sure it is when it accuses; the
+reader sees the confidence, not the ranking.
 
 This is the result the design predicts rather than a disappointing one. The
 admissibility rule removes evidence from the model — all of the exculpatory
@@ -552,9 +561,10 @@ rather than toward false reassurance.
 
 ### 7.2 What the admissibility rule costs
 
-Disabling the clamp raises ROC-AUC from 0.957 to 0.973 on the clean corpus, and
-the legacy hand-weighted rule — which admits exculpatory style evidence freely —
-reaches 0.978. The gain is real and it is a trap: it comes from learning that fluent prose indicates a
+In the deployed configuration, disabling the clamp raises ROC-AUC from 0.951 to
+0.983 on the clean corpus and raises calibration error on accusations from 0.152
+to 0.191; the legacy hand-weighted rule — which admits exculpatory style
+evidence freely — reaches 0.978. The gain is real and it is a trap: it comes from learning that fluent prose indicates a
 genuine article, which holds on a corpus whose fabrications are crude and fails
 against a competent one. ISOT contains no competent fabrications to expose the
 error; the adversarial set of Section 7.6 contains ten. We report both
@@ -785,8 +795,8 @@ reflect the index rather than the world. The system reports *unverified* in that
 case rather than a verdict, which is the correct behaviour, but the rate at
 which it does so is a property of the index as much as of the article.
 
-**The one-sided rule costs discrimination.** Section 7.2 reports AUC of 0.957
-with the rule enforced against 0.973 without it, and 0.978 for the legacy rule.
+**The one-sided rule costs discrimination.** Section 7.2 reports AUC of 0.951
+with the rule enforced against 0.983 without it, and 0.978 for the legacy rule.
 We argue the difference is bought with evidence a competent adversary supplies
 at will, but on a corpus of incompetent adversaries the unconstrained model is
 genuinely the better classifier, and we do not claim otherwise.
@@ -817,9 +827,10 @@ which every weight is a likelihood ratio measured from labelled data rather than
 a constant chosen by hand, and reported the result as a probability that can be
 checked against outcomes rather than a score on an invented scale. Held out, this
 leaves accuracy where the rule it replaces left it — 114 correct against 115, of
-120 — and reduces calibration error where the system accuses twentyfold, from
-0.267 to 0.013. It also costs something, and we report that too: two points of
-ranking performance, on a corpus that cannot express the attack the rule defends
+120 — and reduces calibration error where the system accuses from 0.267 to
+0.152. It also costs something, and we report that too: 0.027 of ROC-AUC, and
+overall calibration on a corpus whose only exculpatory evidence is the style the
+rule refuses to admit — a corpus that cannot express the attack the rule defends
 against.
 
 The property we regard as central is what the system does when it does not know.

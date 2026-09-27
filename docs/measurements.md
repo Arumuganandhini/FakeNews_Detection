@@ -101,6 +101,98 @@ The well-written fabrication is the case the whole design exists for: calm
 prose, named sources, no clickbait, describing an event that never happened. It
 does not reach a positive verdict.
 
+**Measured before the six fixes of 2026-09-28 (commit 00a6c18).** It must be
+re-run once the news quota resets; until then, the matrix below is the current
+end-to-end result.
+
+---
+
+## 2a. Every verdict class through every input type
+
+```
+MATRIX_ARTICLE=<live article URL> node eval/matrixCheck.js   # backend running
+```
+
+Driven over HTTP, the way a reader reaches the system. The screenshot for each
+case is rendered from the case's own words at run time, so OCR is exercised
+for real. The script probes the news index, the reference work and the model
+first; a row whose answer needs a channel that is down is **BLOCKED**, and a row
+that came back `verification-unavailable` is **INCONCLUSIVE**. Neither is
+counted as a pass. Written to `eval/results/matrix.json`.
+
+Run on the final code, 2026-09-28. The news index quota ran out part-way
+through the run.
+
+| Case | Text | Screenshot | Rule |
+|---|---|---|---|
+| Real event (grand jury, Nolan Wells) | REAL ✓ | REAL ✓ | corroborated-by-multiple-independent-sources |
+| False premise ("Prime Minister Rahul Gandhi") | FAKE ✓ | FAKE ✓ | premise-contradicted-by-reference |
+| Invented announcement (income tax abolished) | inconclusive | inconclusive | verification-unavailable (quota) |
+| Polished fabrication (diabetes trial) | inconclusive | inconclusive | verification-unavailable (quota) |
+| Exhortation with no claim ("Wake up…") | REFUSED ✓ | REFUSED ✓ | unfalsifiable |
+
+| Link or video | Result | Rule / status |
+|---|---|---|
+| Live BBC article, about 3 hours old | CANNOT VERIFY ✓ | too-recent-to-corroborate |
+| AP news video (YouTube transcript) | inconclusive | verification-unavailable (quota) |
+| Link into a private address | 400 ✓ | refused before fetching |
+| Host that does not resolve | 422 ✓ | "We could not reach that website." |
+| Publisher that blocks automated reading | 422 ✓ | FETCH_BLOCKED |
+
+**Decided rows: 10 of 10 correct** — text 3/3, screenshot 3/3, link 4/4.
+**5 rows inconclusive** because the news quota ran out; they are not scored.
+
+For those five, the run before (same day, before the too-recent rule and the
+premise-check changes) gave: invented announcement CANNOT VERIFY by
+`no-independent-coverage` for both text and screenshot; polished fabrication
+CANNOT VERIFY by `no-independent-coverage` for both; AP video FAKE by
+`premise-contradicted-by-reference`. **That FAKE was wrong**, and was only
+counted as a pass because the video row then accepted any verdict. The row now
+accepts only REAL or CANNOT VERIFY, and the cause is fixed (next section).
+
+### What the matrix found
+
+Six defects, all fixed in commit 00a6c18, each with a regression test:
+
+| Defect | Effect before the fix |
+|---|---|
+| The gate joined headline and body with a bare space | "Wake up…" gained a phantom proper noun and got a verdict instead of being refused |
+| The claim-extraction prompt left the keyword field outside its list | a BBC terrorism-arrest report was called NOT A FACTUAL CLAIM |
+| Refused links had no error code | private address and unreachable host returned HTTP 500 |
+| BBC pages have 76 `<p>` opens and 37 closes | the site menu was read as the first paragraph of the article |
+| The news index runs about a day behind | a genuine 2-hour-old story was told "no other outlet is reporting this" |
+| The premise judge counted ancestry against birthplace | a genuine AP video was called FAKE in 1 of 8 runs |
+
+## 2b. Premise-check reliability
+
+Measured by calling `checkPremises` from `agents/referenceCheck.js` directly on
+the same two inputs, repeated; there is no script for this in `eval/` yet.
+
+The same two inputs, before and after the premise-check changes. The
+hosted model writes about 2,000 characters of reasoning before its JSON; at the
+old 450-token budget most replies were cut off before the answer began.
+
+| Input | Before | After |
+|---|---|---|
+| False premise ("Prime Minister Rahul Gandhi") — should contradict | 3 of 5, one judgement failed | **6 of 6**, none failed |
+| Genuine AP video (Pope Leo XIV at Lourdes) — should not | 1 of 8 contradicted | **0 of 6** |
+
+Mean premise check after the change: 13.3 s.
+
+## 2c. How far behind live the news index runs
+
+The newest article the index returned for any query on 2026-09-28 was **30.5
+hours old** (NewsAPI developer plan). A story newer than that cannot be
+corroborated however widely it was carried. The verdict engine now reports
+such a story as `too-recent-to-corroborate`, and the empty search adds nothing
+to its probability, instead of reading the silence as evidence against it.
+`NEWS_INDEX_LAG_HOURS` (default 24) sets the window; set it to 0 on a plan that
+serves live articles.
+
+The same quota — 100 requests per 24 hours, 50 per 12 — caps how much can be
+measured in a day: a full analysis makes several index requests, and the
+twelve analyses in the matrix used up a fresh allowance.
+
 ---
 
 ## 3. Deterministic components
@@ -150,7 +242,7 @@ The two configurations give different answers and both belong in the record.
 | Legacy mean score of the fabrications | 7.3/10 | 7.1/10 |
 
 The deterministic row is reproducible on any machine with no network and no
-model. The deployed row was measured once, and both of its failures were
+model, and was re-run on the final code on 2026-09-28 with the same result. The deployed row was measured once, and both of its failures were
 diagnosed:
 
 **The genuine article condemned (`real-02`)** quotes a council transport
@@ -168,10 +260,13 @@ leak forces overnight evacuation of three districts", and the corroboration
 channel returned `corroborated-by-multiple-independent-sources`. The item is
 written without a single proper noun, so the retrieved coverage was about some
 other chemical incident. The relevance gate in `agents/evidenceRelevance.js`
-exists to discard coverage sharing no anchor with the claim and did not discard
-this. **This is unfixed.**
+fell back to plain vocabulary overlap when a claim named nothing, and a real
+Ohio chemical-leak story cleared it on four shared words. **Fixed:** a claim
+that names no person, place, organisation or figure can no longer be
+corroborated by anything (commit b4be344, four regression tests).
 
-**The deployed row has not been re-measured since the name-collision fix.** The
+**The deployed row has not been re-measured since the name-collision fix, the
+fab-04 fix, or the six fixes of commit 00a6c18.** The
 NewsAPI developer quota — 100 requests in 24 hours — was exhausted by the day's
 measurement, and a run without corroboration reports `verification-unavailable`
 for most items, which produces a clean-looking 0/6 and 6/6 that is an artefact
@@ -191,18 +286,20 @@ node eval/validateScoring.js --clean-only
 node eval/validateScoring.js --clean-only --no-clamp
 ```
 
-Isotonic-calibrated figures on the same 120 held-out articles.
+The deployed scoring path on the same 120 held-out articles: calibrate, then
+re-apply the clamp. (An earlier version of this table compared the isotonic
+rows, which do not re-apply it and are not what ships.)
 
 | | clamp enforced | clamp disabled |
 |---|---|---|
 | Accuracy | 0.950 | 0.958 |
-| ROC-AUC | 0.957 | 0.983 |
-| ECE where accusing | **0.013** | 0.039 |
+| ROC-AUC | 0.951 | 0.983 |
+| ECE where accusing | **0.152** | 0.191 |
 
-The clamp costs 0.026 AUC and one article of accuracy, and buys a threefold
-reduction in calibration error where the system accuses. The discrimination
-given up comes from learning that fluent prose indicates a genuine article,
-which holds on a corpus of crude fabrications and fails against a careful one.
+The clamp costs 0.032 AUC and one article of accuracy, and lowers calibration
+error where the system accuses by a fifth. The discrimination given up comes
+from learning that fluent prose indicates a genuine article, which holds on a
+corpus of crude fabrications and fails against a careful one.
 
 ---
 
@@ -240,11 +337,23 @@ node eval/validateScoring.js --clean-only
 |---|---|---|---|---|---|
 | Legacy hand-weighted sum | 0.958 | 0.978 | 0.237 | 0.267 | 0.101 |
 | Weight of evidence, raw | 0.950 | 0.973 | 0.308 | 0.257 | 0.142 |
-| Weight of evidence, isotonic | 0.950 | 0.957 | 0.028 | **0.013** | 0.048 |
+| Weight of evidence, isotonic, clamp not re-applied | 0.950 | 0.957 | 0.028 | 0.013 | 0.048 |
+| **Weight of evidence, as deployed** | **0.950** | **0.951** | **0.246** | **0.152** | **0.117** |
 
-The accuracy difference is one article — 114 correct against 115. The separation
-is in calibration where the system accuses: **0.267 to 0.013, a factor of
-twenty**, with the Brier score halved.
+**The deployed row is the one that describes the system.** An earlier version
+of this file and of the paper quoted the isotonic row — "0.267 to 0.013, a
+factor of twenty" — but that map is free to move articles toward "genuine" on
+clean style, which is exactly what the clamp forbids, and the deployed path
+re-applies the clamp after calibrating. Corrected on 2026-09-28.
+
+For the deployed system: accuracy is one article lower (114 against 115 of
+120), AUC is 0.027 lower, and calibration error where it accuses falls from
+0.267 to **0.152** (43% lower). Overall calibration is *not* better — ECE 0.246
+against 0.237, Brier 0.117 against 0.101 — and the reliability table says why:
+the 59 articles in the lowest band are stated at 0.41 (the prior) and observed
+fabricated at 0.07. On ISOT the only exculpatory evidence is style, so the
+deployed model will not exonerate on it; that job belongs to corroboration and
+provenance, which a historical corpus with hidden sources cannot exercise.
 
 Style factors correlate at mean r = 0.55, giving 1.52 effective independent
 factors of four. The strongest pair, headline quality and language, correlates
@@ -261,7 +370,7 @@ CI=true npx react-scripts test --watchAll=false   # frontend
 
 | Suite | Result |
 |---|---|
-| Backend | 129 / 129 |
+| Backend | 151 / 151 |
 | Frontend | 14 / 14 |
 
 `test/pipeline.nomodel.test.js` runs the whole pipeline with every model and

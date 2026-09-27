@@ -1,0 +1,231 @@
+{
+  "generatedAt": "2026-09-27T23:38:03.928Z",
+  "model": "none (deterministic analysers)",
+  "genuineSet": "written items (see corpus note)",
+  "items": 10,
+  "deceptive": {
+    "count": 6,
+    "misleadingUnderLegacy": 4,
+    "misleadingUnderCurrent": 0,
+    "verdictCorrect": 6
+  },
+  "genuine": {
+    "count": 2,
+    "condemned": 0,
+    "verdictAcceptable": 2
+  },
+  "meanLegacyScoreOfFabrications": 7.3,
+  "rows": [
+    {
+      "id": "fab-01",
+      "label": "fabrication",
+      "expected": [
+        "unverified",
+        "likely-false"
+      ],
+      "probabilityFake": 0.15,
+      "scoreBeforeCeiling": 8.5,
+      "legacyScore": 8.5,
+      "legacyBand": "Looks trustworthy",
+      "currentScore": 4.9,
+      "verdict": "unverified",
+      "verdictLabel": "Not confirmed",
+      "rule": "verification-unavailable",
+      "confidence": 0.5,
+      "verdictAsExpected": true,
+      "legacyMisleading": true,
+      "currentMisleading": false,
+      "degraded": 4
+    },
+    {
+      "id": "fab-02",
+      "label": "fabrication",
+      "expected": [
+        "unverified",
+        "likely-false"
+      ],
+      "probabilityFake": 0.15,
+      "scoreBeforeCeiling": 8.5,
+      "legacyScore": 8,
+      "legacyBand": "Looks trustworthy",
+      "currentScore": 4.9,
+      "verdict": "unverified",
+      "verdictLabel": "Not confirmed",
+      "rule": "verification-unavailable",
+      "confidence": 0.5,
+      "verdictAsExpected": true,
+      "legacyMisleading": true,
+      "currentMisleading": false,
+      "degraded": 4
+    },
+    {
+      "id": "fab-03",
+      "label": "fabrication",
+      "expected": [
+        "unverified",
+        "likely-false"
+      ],
+      "probabilityFake": 0.15,
+      "scoreBeforeCeiling": 8.5,
+      "legacyScore": 8,
+      "legacyBand": "Looks trustworthy",
+      "currentScore": 4.9,
+      "verdict": "unverified",
+      "verdictLabel": "Not confirmed",
+      "rule": "verification-unavailable",
+      "confidence": 0.5,
+      "verdictAsExpected": true,
+      "legacyMisleading": true,
+      "currentMisleading": false,
+      "degraded": 4
+    },
+    {
+      "id": "fab-04",
+      "label": "fabrication-high-impact",
+      "expected": [
+        "likely-false",
+        "unverified"
+      ],
+      "probabilityFake": 0.1669,
+      "scoreBeforeCeiling": 8.3,
+      "legacyScore": 3.8,
+      "legacyBand": "Be skeptical",
+      "currentScore": 4.9,
+      "verdict": "unverified",
+      "verdictLabel": "Not confirmed",
+      "rule": "verification-unavailable",
+      "confidence": 0.5,
+      "verdictAsExpected": true,
+      "legacyMisleading": false,
+      "currentMisleading": false,
+      "degraded": 4
+    },
+    {
+      "id": "fab-05",
+      "label": "fabrication",
+      "expected": [
+        "unverified",
+        "likely-false"
+      ],
+      "probabilityFake": 0.15,
+      "scoreBeforeCeiling": 8.5,
+      "legacyScore": 8,
+      "legacyBand": "Looks trustworthy",
+      "currentScore": 4.9,
+      "verdict": "unverified",
+      "verdictLabel": "Not confirmed",
+      "rule": "verification-unavailable",
+      "confidence": 0.5,
+      "verdictAsExpected": true,
+      "legacyMisleading": true,
+      "currentMisleading": false,
+      "degraded": 4
+    },
+    {
+      "id": "real-01",
+      "label": "genuine",
+      "expected": [
+        "corroborated",
+        "likely-true",
+        "unverified"
+      ],
+      "probabilityFake": 0.02,
+      "scoreBeforeCeiling": 9.8,
+      "legacyScore": 8.9,
+      "legacyBand": "Looks trustworthy",
+      "currentScore": 4.9,
+      "verdict": "unverified",
+      "verdictLabel": "Not confirmed",
+      "rule": "verification-unavailable",
+      "confidence": 0.5,
+      "verdictAsExpected": true,
+      "legacyMisleading": true,
+      "currentMisleading": false,
+      "degraded": 4
+    },
+    {
+      "id": "real-02",
+      "label": "genuine",
+      "expected": [
+        "corroborated",
+        "likely-true",
+        "unverified"
+      ],
+      "probabilityFake": 0.02,
+      "scoreBeforeCeiling": 9.8,
+      "legacyScore": 8.8,
+      "legacyBand": "Looks trustworthy",
+      "currentScore": 4.9,
+      "verdict": "unverified",
+      "verdictLabel": "Not confirmed",
+      "rule": "verification-unavailable",
+      "confidence": 0.5,
+      "verdictAsExpected": true,
+      "legacyMisleading": true,
+      "currentMisleading": false,
+      "degraded": 4
+    },
+    {
+      "id": "satire-01",
+      "label": "satire",
+      "expected": [
+        "satire"
+      ],
+      "probabilityFake": 0.25,
+      "scoreBeforeCeiling": 7.5,
+      "legacyScore": 5.8,
+      "legacyBand": "Mostly fine",
+      "currentScore": 4,
+      "verdict": "satire",
+      "verdictLabel": "Satire",
+      "rule": "satirical-publisher",
+      "confidence": 0.9,
+      "verdictAsExpected": true,
+      "legacyMisleading": true,
+      "currentMisleading": false,
+      "degraded": 4
+    },
+    {
+      "id": "opinion-01",
+      "label": "commentary",
+      "expected": [
+        "opinion",
+        "unverified"
+      ],
+      "probabilityFake": 0.06,
+      "scoreBeforeCeiling": 9.4,
+      "legacyScore": 7.4,
+      "legacyBand": "Mostly fine",
+      "currentScore": 4.9,
+      "verdict": "unverified",
+      "verdictLabel": "Not confirmed",
+      "rule": "verification-unavailable",
+      "confidence": 0.5,
+      "verdictAsExpected": true,
+      "legacyMisleading": true,
+      "currentMisleading": false,
+      "degraded": 4
+    },
+    {
+      "id": "lowqual-01",
+      "label": "low-quality",
+      "expected": [
+        "unverified",
+        "likely-false"
+      ],
+      "probabilityFake": 0.25,
+      "scoreBeforeCeiling": 7.5,
+      "legacyScore": 4.2,
+      "legacyBand": "Read carefully",
+      "currentScore": 4.9,
+      "verdict": "unverified",
+      "verdictLabel": "Not confirmed",
+      "rule": "verification-unavailable",
+      "confidence": 0.5,
+      "verdictAsExpected": true,
+      "legacyMisleading": false,
+      "currentMisleading": false,
+      "degraded": 4
+    }
+  ]
+}

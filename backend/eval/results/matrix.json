@@ -1,0 +1,340 @@
+{
+  "generatedAt": "2026-09-27T23:18:44.335Z",
+  "base": "http://localhost:5000",
+  "channels": {
+    "newsIndex": {
+      "up": true,
+      "detail": "8 articles"
+    },
+    "reference": {
+      "up": true,
+      "detail": "Rahul Gandhi, 2083 chars"
+    },
+    "model": {
+      "up": true,
+      "detail": "ok"
+    }
+  },
+  "routingTable": "2026-09-27T18:33:19.933Z",
+  "cases": [
+    {
+      "id": "real",
+      "accept": [
+        "REAL"
+      ],
+      "needs": [
+        "newsIndex"
+      ],
+      "why": "A decision several outlets carried. The corroboration channel should find them."
+    },
+    {
+      "id": "fake",
+      "accept": [
+        "FAKE"
+      ],
+      "needs": [
+        "reference"
+      ],
+      "why": "A real person in an office he has never held. The reference work settles it without any news coverage, so this row stands even when the index is down."
+    },
+    {
+      "id": "cannot-verify",
+      "accept": [
+        "CANNOT VERIFY"
+      ],
+      "needs": [
+        "newsIndex"
+      ],
+      "why": "An invented national announcement. Nobody reports it, so nothing supports it."
+    },
+    {
+      "id": "polished-fabrication",
+      "accept": [
+        "CANNOT VERIFY",
+        "FAKE"
+      ],
+      "needs": [
+        "newsIndex"
+      ],
+      "why": "The case the design exists for: calm, attributed, no clickbait, describing an event that never happened. Presentation must not carry it to a positive verdict."
+    },
+    {
+      "id": "refused",
+      "accept": [
+        "REFUSED"
+      ],
+      "needs": [],
+      "why": "Asserts nothing a newsroom could confirm or deny. The gate should refuse before any expensive channel is touched."
+    }
+  ],
+  "linkCases": [
+    {
+      "id": "link-private-address",
+      "url": "http://127.0.0.1:5000/health",
+      "accept": [
+        400,
+        422
+      ],
+      "why": "A link into our own network must be refused, not fetched."
+    },
+    {
+      "id": "link-unreachable",
+      "url": "https://example.invalid/no-such-article",
+      "accept": [
+        400,
+        422
+      ],
+      "why": "A link that cannot be read must produce an error, never a verdict."
+    },
+    {
+      "id": "link-blocked-publisher",
+      "url": "https://apnews.com/hub/world-news",
+      "accept": [
+        422
+      ],
+      "why": "A publisher that forbids automated reading is a condition upstream of us, not a server fault and not a finding about the article."
+    }
+  ],
+  "rows": [
+    {
+      "case": "real",
+      "medium": "text",
+      "accept": [
+        "REAL"
+      ],
+      "verdict": "REAL",
+      "rule": "corroborated-by-multiple-independent-sources",
+      "state": "PASS",
+      "note": null,
+      "modality": "text",
+      "ocrChars": null,
+      "probabilityPercent": 2,
+      "degraded": [],
+      "seconds": 27.9
+    },
+    {
+      "case": "real",
+      "medium": "screenshot",
+      "accept": [
+        "REAL"
+      ],
+      "verdict": "REAL",
+      "rule": "corroborated-by-multiple-independent-sources",
+      "state": "PASS",
+      "note": null,
+      "modality": "image",
+      "ocrChars": 339,
+      "probabilityPercent": 2,
+      "degraded": [],
+      "seconds": 26.7
+    },
+    {
+      "case": "fake",
+      "medium": "text",
+      "accept": [
+        "FAKE"
+      ],
+      "verdict": "FAKE",
+      "rule": "premise-contradicted-by-reference",
+      "state": "PASS",
+      "note": null,
+      "modality": "text",
+      "ocrChars": null,
+      "probabilityPercent": 44,
+      "degraded": [],
+      "seconds": 26.9
+    },
+    {
+      "case": "fake",
+      "medium": "screenshot",
+      "accept": [
+        "FAKE"
+      ],
+      "verdict": "FAKE",
+      "rule": "premise-contradicted-by-reference",
+      "state": "PASS",
+      "note": null,
+      "modality": "image",
+      "ocrChars": 238,
+      "probabilityPercent": 38,
+      "degraded": [],
+      "seconds": 19.2
+    },
+    {
+      "case": "cannot-verify",
+      "medium": "text",
+      "accept": [
+        "CANNOT VERIFY"
+      ],
+      "verdict": "CANNOT VERIFY",
+      "rule": "verification-unavailable",
+      "state": "INCONCLUSIVE",
+      "note": "abstained; corroboration did not run",
+      "modality": "text",
+      "ocrChars": null,
+      "probabilityPercent": 35,
+      "degraded": [],
+      "seconds": 14.9
+    },
+    {
+      "case": "cannot-verify",
+      "medium": "screenshot",
+      "accept": [
+        "CANNOT VERIFY"
+      ],
+      "verdict": "CANNOT VERIFY",
+      "rule": "verification-unavailable",
+      "state": "INCONCLUSIVE",
+      "note": "abstained; corroboration did not run",
+      "modality": "image",
+      "ocrChars": 316,
+      "probabilityPercent": 35,
+      "degraded": [],
+      "seconds": 27.9
+    },
+    {
+      "case": "polished-fabrication",
+      "medium": "text",
+      "accept": [
+        "CANNOT VERIFY",
+        "FAKE"
+      ],
+      "verdict": "CANNOT VERIFY",
+      "rule": "verification-unavailable",
+      "state": "INCONCLUSIVE",
+      "note": "abstained; corroboration did not run",
+      "modality": "text",
+      "ocrChars": null,
+      "probabilityPercent": 35,
+      "degraded": [],
+      "seconds": 27.9
+    },
+    {
+      "case": "polished-fabrication",
+      "medium": "screenshot",
+      "accept": [
+        "CANNOT VERIFY",
+        "FAKE"
+      ],
+      "verdict": "CANNOT VERIFY",
+      "rule": "verification-unavailable",
+      "state": "INCONCLUSIVE",
+      "note": "abstained; corroboration did not run",
+      "modality": "image",
+      "ocrChars": 524,
+      "probabilityPercent": 35,
+      "degraded": [],
+      "seconds": 25.2
+    },
+    {
+      "case": "refused",
+      "medium": "text",
+      "accept": [
+        "REFUSED"
+      ],
+      "verdict": "REFUSED",
+      "rule": "unfalsifiable",
+      "state": "PASS",
+      "note": null,
+      "modality": null,
+      "ocrChars": null,
+      "probabilityPercent": null,
+      "degraded": [],
+      "seconds": 0
+    },
+    {
+      "case": "refused",
+      "medium": "screenshot",
+      "accept": [
+        "REFUSED"
+      ],
+      "verdict": "REFUSED",
+      "rule": "unfalsifiable",
+      "state": "PASS",
+      "note": null,
+      "modality": null,
+      "ocrChars": 178,
+      "probabilityPercent": null,
+      "degraded": [],
+      "seconds": 0.4
+    },
+    {
+      "case": "live-article",
+      "medium": "link",
+      "accept": [
+        "REAL",
+        "CANNOT VERIFY"
+      ],
+      "verdict": "CANNOT VERIFY",
+      "rule": "too-recent-to-corroborate",
+      "state": "PASS",
+      "note": null,
+      "modality": "article",
+      "ocrChars": null,
+      "probabilityPercent": 2,
+      "degraded": [],
+      "seconds": 31.6
+    },
+    {
+      "case": "video",
+      "medium": "video",
+      "accept": [
+        "REAL",
+        "CANNOT VERIFY"
+      ],
+      "verdict": "CANNOT VERIFY",
+      "rule": "verification-unavailable",
+      "state": "INCONCLUSIVE",
+      "note": "abstained; corroboration did not run",
+      "modality": "video",
+      "ocrChars": null,
+      "probabilityPercent": 2,
+      "degraded": [],
+      "seconds": 26.8
+    },
+    {
+      "case": "link-private-address",
+      "medium": "link",
+      "verdict": "HTTP 400",
+      "state": "PASS",
+      "note": "That link points to a private address and cannot be checke",
+      "seconds": 0
+    },
+    {
+      "case": "link-unreachable",
+      "medium": "link",
+      "verdict": "HTTP 422",
+      "state": "PASS",
+      "note": "We could not reach that website.",
+      "seconds": 0.1
+    },
+    {
+      "case": "link-blocked-publisher",
+      "medium": "link",
+      "verdict": "HTTP 422",
+      "state": "PASS",
+      "note": "apnews.com does not allow its pages to be read automatical",
+      "seconds": 0.2
+    }
+  ],
+  "summary": {
+    "decided": "10/10",
+    "blocked": 0,
+    "inconclusive": 5,
+    "skipped": 0,
+    "byMedium": {
+      "text": {
+        "pass": 3,
+        "total": 3
+      },
+      "screenshot": {
+        "pass": 3,
+        "total": 3
+      },
+      "link": {
+        "pass": 4,
+        "total": 4
+      }
+    }
+  }
+}
