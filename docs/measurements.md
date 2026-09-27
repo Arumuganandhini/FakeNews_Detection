@@ -128,6 +128,105 @@ has no bearing on them.
 
 ---
 
+## 4a. Adversarial benchmark
+
+```
+node eval/adversarialBench.js --no-model   # deterministic analysers only
+node eval/adversarialBench.js              # deployed configuration
+```
+
+Ten written items: five fabrications in plain newsroom register, one
+high-impact fabrication carrying manipulation signals, two genuine reports, one
+satirical piece, one commentary. Each scored twice from identical factor
+outputs — once under the legacy additive rule, once under the current one.
+
+The two configurations give different answers and both belong in the record.
+
+| | deterministic | deployed, with live corroboration |
+|---|---|---|
+| Deceptive items read as credible | 4/6 → **0/6** | 4/6 → **1/6** |
+| Verdict matched expectation | **6/6** | 5/6 |
+| Genuine articles wrongly condemned | **0/2** | 1/2 |
+| Legacy mean score of the fabrications | 7.3/10 | 7.1/10 |
+
+The deterministic row is reproducible on any machine with no network and no
+model. The deployed row was measured once, and both of its failures were
+diagnosed:
+
+**The genuine article condemned (`real-02`)** quotes a council transport
+secretary named Meera Krishnan. The reference lookup resolved that name to the
+encyclopedia entry for Meera Krishnan the Indian actress and reported the
+conflict it had been asked to find: the article says transport secretary, the
+entry says actress. Both true, about different people. The judge is now asked
+whether the entry is about the same subject before a contradiction is admitted,
+and the case is covered by a regression test. Verified directly — that article
+now returns `consistent`, while "Prime Minister Rahul Gandhi" remains
+`contradicted`.
+
+**The fabrication read as credible (`fab-04`)** is an invented "secret chemical
+leak forces overnight evacuation of three districts", and the corroboration
+channel returned `corroborated-by-multiple-independent-sources`. The item is
+written without a single proper noun, so the retrieved coverage was about some
+other chemical incident. The relevance gate in `agents/evidenceRelevance.js`
+exists to discard coverage sharing no anchor with the claim and did not discard
+this. **This is unfixed.**
+
+**The deployed row has not been re-measured since the name-collision fix.** The
+NewsAPI developer quota — 100 requests in 24 hours — was exhausted by the day's
+measurement, and a run without corroboration reports `verification-unavailable`
+for most items, which produces a clean-looking 0/6 and 6/6 that is an artefact
+of abstention rather than evidence. Those numbers are not reported here. The
+run should be repeated once quota resets.
+
+One thing that did hold under quota exhaustion: every affected item reported
+`verification-unavailable`, not "no other outlet is reporting this". A search
+that could not run is not a finding of absence.
+
+---
+
+## 4b. What the one-sided rule costs
+
+```
+node eval/validateScoring.js --clean-only
+node eval/validateScoring.js --clean-only --no-clamp
+```
+
+Isotonic-calibrated figures on the same 120 held-out articles.
+
+| | clamp enforced | clamp disabled |
+|---|---|---|
+| Accuracy | 0.950 | 0.958 |
+| ROC-AUC | 0.957 | 0.983 |
+| ECE where accusing | **0.013** | 0.039 |
+
+The clamp costs 0.026 AUC and one article of accuracy, and buys a threefold
+reduction in calibration error where the system accuses. The discrimination
+given up comes from learning that fluent prose indicates a genuine article,
+which holds on a corpus of crude fabrications and fails against a careful one.
+
+---
+
+## 4c. Latency and degradation
+
+Measured over HTTP against the running backend, local model warm.
+
+| | measured |
+|---|---|
+| Cold analysis, one article | 27.2 s (functional-check median 18.5 s) |
+| Cached analysis, same URL | **2.7 – 3.4 ms** |
+| First check visible to the reader | **1.47 s** |
+| Full six-check stream | 9.2 s on a short article |
+
+With nothing reachable — no model, no local runtime, no news index — the
+deterministic analysers alone still separate the cases:
+
+| Article | Writing score | Factors degraded |
+|---|---|---|
+| Fabricated, loaded language, unattributable sourcing | **3.5 / 10** | 4, all marked |
+| Ordinary attributed reporting | **8.5 / 10** | 4, all marked |
+
+---
+
 ## 5. Scoring model, held out
 
 ```
