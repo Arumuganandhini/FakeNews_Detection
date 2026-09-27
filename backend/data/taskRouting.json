@@ -1,0 +1,249 @@
+{
+  "generatedAt": "2026-09-27T18:16:55.246Z",
+  "method": "3 runs per task per provider on fixed inputs; a reply counts as valid only when it parses and carries the keys the caller requires, and a content factor that fell back to the pattern matcher counts as invalid.",
+  "thresholds": {
+    "minValidity": 0.8,
+    "maxScoreDrift": 2
+  },
+  "reference": "nim",
+  "localModel": "llama3.1:8b",
+  "default": [
+    "ollama",
+    "nim",
+    "gemini"
+  ],
+  "tasks": {
+    "clickbait": {
+      "chain": [
+        "ollama",
+        "nim",
+        "gemini"
+      ],
+      "reason": "local valid on 100% of replies and within 0.33 of nim",
+      "measured": {
+        "nim": {
+          "validity": 1,
+          "medianMs": 4379,
+          "meanScore": 1.67,
+          "runs": 3
+        },
+        "gemini": {
+          "validity": 1,
+          "medianMs": 3905,
+          "meanScore": 0.5,
+          "runs": 3
+        },
+        "ollama": {
+          "validity": 1,
+          "medianMs": 1603,
+          "meanScore": 2,
+          "runs": 3
+        }
+      },
+      "scoreDrift": 0.33
+    },
+    "bias": {
+      "chain": [
+        "ollama",
+        "nim",
+        "gemini"
+      ],
+      "reason": "local valid on 100% of replies and within 0 of nim",
+      "measured": {
+        "nim": {
+          "validity": 0.67,
+          "medianMs": 10199,
+          "meanScore": 1,
+          "runs": 3
+        },
+        "gemini": {
+          "validity": 1,
+          "medianMs": 2040,
+          "meanScore": 0.5,
+          "runs": 3
+        },
+        "ollama": {
+          "validity": 1,
+          "medianMs": 4129,
+          "meanScore": 1,
+          "runs": 3
+        }
+      },
+      "scoreDrift": 0
+    },
+    "manipulation": {
+      "chain": [
+        "ollama",
+        "nim",
+        "gemini"
+      ],
+      "reason": "local valid on 100% of replies and within 0 of nim",
+      "measured": {
+        "nim": {
+          "validity": 1,
+          "medianMs": 25319,
+          "meanScore": 2.2,
+          "runs": 3
+        },
+        "gemini": {
+          "validity": 1,
+          "medianMs": 2051,
+          "meanScore": 2.2,
+          "runs": 3
+        },
+        "ollama": {
+          "validity": 1,
+          "medianMs": 3519,
+          "meanScore": 2.2,
+          "runs": 3
+        }
+      },
+      "scoreDrift": 0
+    },
+    "transparency": {
+      "chain": [
+        "ollama",
+        "nim",
+        "gemini"
+      ],
+      "reason": "local valid on 100% of replies and within 2 of nim",
+      "measured": {
+        "nim": {
+          "validity": 1,
+          "medianMs": 18493,
+          "meanScore": 8,
+          "runs": 3
+        },
+        "gemini": {
+          "validity": 1,
+          "medianMs": 6067,
+          "meanScore": 8,
+          "runs": 3
+        },
+        "ollama": {
+          "validity": 1,
+          "medianMs": 1748,
+          "meanScore": 10,
+          "runs": 3
+        }
+      },
+      "scoreDrift": 2
+    },
+    "summary": {
+      "chain": [
+        "ollama",
+        "nim",
+        "gemini"
+      ],
+      "reason": "local valid on 100% of replies",
+      "measured": {
+        "nim": {
+          "validity": 1,
+          "medianMs": 1831,
+          "meanScore": null,
+          "runs": 3
+        },
+        "gemini": {
+          "validity": 1,
+          "medianMs": 1310,
+          "meanScore": null,
+          "runs": 3
+        },
+        "ollama": {
+          "validity": 1,
+          "medianMs": 665,
+          "meanScore": null,
+          "runs": 3
+        }
+      },
+      "scoreDrift": null
+    },
+    "detailed summary": {
+      "chain": [
+        "ollama",
+        "nim",
+        "gemini"
+      ],
+      "reason": "local valid on 100% of replies",
+      "measured": {
+        "nim": {
+          "validity": 0.67,
+          "medianMs": 21604,
+          "meanScore": null,
+          "runs": 3
+        },
+        "gemini": {
+          "validity": 1,
+          "medianMs": 1354,
+          "meanScore": null,
+          "runs": 3
+        },
+        "ollama": {
+          "validity": 1,
+          "medianMs": 902,
+          "meanScore": null,
+          "runs": 3
+        }
+      },
+      "scoreDrift": null
+    },
+    "claim extraction": {
+      "chain": [
+        "ollama",
+        "nim",
+        "gemini"
+      ],
+      "reason": "local valid on 100% of replies",
+      "measured": {
+        "nim": {
+          "validity": 1,
+          "medianMs": 21780,
+          "meanScore": null,
+          "runs": 3
+        },
+        "gemini": {
+          "validity": 1,
+          "medianMs": 1394,
+          "meanScore": null,
+          "runs": 3
+        },
+        "ollama": {
+          "validity": 1,
+          "medianMs": 1709,
+          "meanScore": null,
+          "runs": 3
+        }
+      },
+      "scoreDrift": null
+    },
+    "stance judgement": {
+      "chain": [
+        "ollama",
+        "nim",
+        "gemini"
+      ],
+      "reason": "local valid on 100% of replies",
+      "measured": {
+        "nim": {
+          "validity": 1,
+          "medianMs": 7276,
+          "meanScore": null,
+          "runs": 3
+        },
+        "gemini": {
+          "validity": 1,
+          "medianMs": 2625,
+          "meanScore": null,
+          "runs": 3
+        },
+        "ollama": {
+          "validity": 1,
+          "medianMs": 1032,
+          "meanScore": null,
+          "runs": 3
+        }
+      },
+      "scoreDrift": null
+    }
+  }
+}

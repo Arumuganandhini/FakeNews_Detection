@@ -195,4 +195,10 @@ const compareCoverage = async ({ title, query, source, url }) => {
   };
 };
 
-module.exports = { compareCoverage, COVERAGE_WEIGHTS };
+module.exports = {
+  compareCoverage,
+  COVERAGE_WEIGHTS,
+  // Exposed so eval/benchmarkProviders.js can measure this model call on each
+  // provider. Not part of the agent's interface.
+  __test: { deriveKeywords }
+};

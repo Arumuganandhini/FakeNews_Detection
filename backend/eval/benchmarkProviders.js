@@ -12,9 +12,17 @@
  * every configured provider on fixed inputs and records three things:
  *
  *   validity   — how often the reply parsed AND carried the keys the caller
- *                cannot proceed without. This is the gate: a provider that
+ *                cannot proceed without. This is the floor: a provider that
  *                returns prose, or JSON missing its verdict, has not done the
  *                task however fast it did it.
+ *   correctness — for tasks with a known right answer, how often it gave that
+ *                answer. Validity alone is not capability. The local model
+ *                returns perfectly well-formed JSON for the premise check and
+ *                the wrong verdict in it: asked whether an article calling
+ *                Rahul Gandhi "Prime Minister" conflicts with his encyclopedia
+ *                entry, it answers no. Both hosted models answer yes and quote
+ *                the line. A task with a correctness case must pass it to be
+ *                routed locally, whatever its validity rate.
  *   agreement  — for tasks with a numeric score, how close the provider's
  *                answer is to the hosted reference, on the 0-10 scale the
  *                factors use. Reported as mean absolute difference.
@@ -42,6 +50,8 @@ const RUNS = Number((args[args.indexOf('--runs') + 1]) || 3) || 3;
 
 /** A task is local-eligible at or above this valid-reply rate. */
 const MIN_VALIDITY = 0.8;
+/** ...and, where the task has a known right answer, this success rate on it. */
+const MIN_CORRECTNESS = 0.8;
 /** ...and within this mean absolute difference from the hosted reference, on 0-10. */
 const MAX_SCORE_DRIFT = 2.0;
 
@@ -101,6 +111,25 @@ const TASKS = [
     valid: (r) => Array.isArray(r) && r.length > 0 && Boolean(r[0].claim && r[0].keywords)
   },
   {
+    name: 'premise check',
+    run: (m) => m.reference.checkPremises(
+      'Prime Minister Rahul Gandhi announces nationwide fuel subsidy',
+      'Prime Minister Rahul Gandhi announced a nationwide fuel subsidy on Tuesday in New Delhi.'),
+    valid: (r) => ['consistent', 'contradicted', 'not-found', 'no-entities'].includes(r.status),
+    // Rahul Gandhi has never been Prime Minister, and his encyclopedia entry
+    // says what he is. A model that reads the entry and reports no conflict has
+    // not done this task, however well-formed its reply.
+    correct: (r) => r.status === 'contradicted' && (r.contradictions || []).length > 0
+  },
+  {
+    name: 'coverage keywords',
+    run: (m) => m.compare.__test
+      ? m.compare.__test.deriveKeywords(HEADLINE)
+      : Promise.resolve(null),
+    valid: (r) => typeof r === 'string' && r.trim().split(/\s+/).length >= 2,
+    skipIfUnavailable: true
+  },
+  {
     name: 'stance judgement',
     run: (m) => m.claims.__test.judgeClaim(
       'The city council approved funding for a cycle lane extension.',
@@ -108,7 +137,9 @@ const TASKS = [
         { source: 'The Hindu', title: 'Council clears cycle lane funding', description: 'Councillors voted 34-11 to approve the extension.', url: 'https://example.com/a' },
         { source: 'Deccan Herald', title: 'Cycle lane plan approved', description: 'The council approved 42 crore for cycle lanes.', url: 'https://example.com/b' }
       ]),
-    valid: (r) => ['supported', 'contradicted', 'unverified'].includes(r.verdict)
+    valid: (r) => ['supported', 'contradicted', 'unverified'].includes(r.verdict),
+    // Both retrieved items report the same vote. "supported" is the answer.
+    correct: (r) => r.verdict === 'supported'
   }
 ];
 
@@ -148,12 +179,16 @@ const measure = async (task, providerName) => {
     transparency: require('../agents/transparencyAgent'),
     claims: require('../agents/claimVerificationAgent'),
     summarize: require('../agents/summarizeAgent'),
-    detailedSummary: require('../agents/detailedSummaryAgent')
+    detailedSummary: require('../agents/detailedSummaryAgent'),
+    reference: require('../agents/referenceCheck'),
+    compare: require('../agents/compareCoverageAgent')
   };
 
   const latencies = [];
   const scores = [];
   let valid = 0;
+  let correct = 0;
+  let attempted = 0;
 
   for (let i = 0; i < RUNS; i++) {
     const started = Date.now();
@@ -174,6 +209,10 @@ const measure = async (task, providerName) => {
           const value = task.score(result);
           if (typeof value === 'number') scores.push(value);
         }
+        if (task.correct) {
+          attempted++;
+          if (task.correct(result)) correct++;
+        }
       }
     } catch (err) {
       // A throw is an invalid reply; the reason is in the gateway's own log.
@@ -185,6 +224,7 @@ const measure = async (task, providerName) => {
 
   return {
     validity: Number((valid / RUNS).toFixed(2)),
+    correctness: attempted ? Number((correct / attempted).toFixed(2)) : null,
     medianMs: median(latencies),
     meanScore: scores.length ? Number(mean(scores).toFixed(2)) : null,
     runs: RUNS
@@ -221,6 +261,7 @@ const main = async () => {
         + ` valid ${String(Math.round(measured.validity * 100)).padStart(3)}%`
         + ` ${(measured.medianMs === null ? '   -  ' : ((measured.medianMs / 1000).toFixed(1) + 's').padStart(6))}`
         + ` ${(measured.meanScore === null ? '   -' : String(measured.meanScore).padStart(5))}`
+        + ` ${(measured.correctness === null ? '    -' : (String(Math.round(measured.correctness * 100)) + '%').padStart(5))}`
       );
     }
   }
@@ -252,16 +293,21 @@ const main = async () => {
 
     const localCapable = Boolean(local)
       && local.validity >= MIN_VALIDITY
+      && (local.correctness === null || local.correctness >= MIN_CORRECTNESS)
       && (drift === null || drift <= MAX_SCORE_DRIFT);
 
     const chain = localCapable ? ['ollama', ...hosted] : [...hosted, 'ollama'];
     const why = !local ? 'no local provider configured'
       : local.validity < MIN_VALIDITY
         ? `local valid on ${(local.validity * 100).toFixed(0)}% of replies, below the ${(MIN_VALIDITY * 100)}% gate`
-        : drift !== null && drift > MAX_SCORE_DRIFT
-          ? `local scores drift ${drift} from ${reference} on a 0-10 scale, above the ${MAX_SCORE_DRIFT} limit`
-          : `local valid on ${(local.validity * 100).toFixed(0)}% of replies`
-            + (drift === null ? '' : ` and within ${drift} of ${reference}`);
+        : local.correctness !== null && local.correctness < MIN_CORRECTNESS
+          ? `local returns well-formed replies but got the known answer right `
+            + `${(local.correctness * 100).toFixed(0)}% of the time, below the ${(MIN_CORRECTNESS * 100)}% gate`
+          : drift !== null && drift > MAX_SCORE_DRIFT
+            ? `local scores drift ${drift} from ${reference} on a 0-10 scale, above the ${MAX_SCORE_DRIFT} limit`
+            : `local valid on ${(local.validity * 100).toFixed(0)}% of replies`
+              + (local.correctness === null ? '' : `, correct on ${(local.correctness * 100).toFixed(0)}%`)
+              + (drift === null ? '' : `, within ${drift} of ${reference}`);
 
     table.tasks[task.name] = { chain, reason: why, measured: results[task.name], scoreDrift: drift };
     console.log(`  ${task.name.padEnd(18)} -> ${chain[0].padEnd(7)}  (${why})`);
