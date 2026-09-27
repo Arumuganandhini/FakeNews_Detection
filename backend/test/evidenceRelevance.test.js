@@ -33,10 +33,17 @@ test('numbers count as distinctive', () => {
   assert.strictEqual(isRelevant(claim, related).relevant, true);
 });
 
-test('a claim with no distinctive vocabulary is not rejected by default', () => {
+// This test used to assert the opposite, on the reasoning that being unable to
+// check relevance is not evidence of irrelevance. That is true, and it is the
+// wrong conclusion to draw from it. The question the gate answers is not "is
+// this evidence irrelevant?" but "may this evidence establish the claim?", and
+// where identity cannot be established the answer to the second is no whatever
+// the answer to the first. Standing aside meant accepting everything, which is
+// how an invented chemical leak came to be reported as corroborated.
+test('a claim too vague to identify cannot be established by anything', () => {
   const verdict = isRelevant('It was said to be so.', { title: 'Something else entirely', description: '' });
-  assert.strictEqual(verdict.relevant, true);
-  assert.strictEqual(verdict.unchecked, true, 'unable to check is not the same as irrelevant');
+  assert.strictEqual(verdict.relevant, false);
+  assert.strictEqual(verdict.unanchored, true, 'the reason is recorded so the reader can be told it');
 });
 
 test('filtering keeps the relevant and reports the discarded', () => {
@@ -55,4 +62,58 @@ test('shared stopwords alone are not relevance', () => {
   const claim = 'The government said that the new policy will be introduced after the year ends.';
   const evidence = { title: 'The government said that there will be more people after the year', description: '' };
   assert.strictEqual(isRelevant(claim, evidence).relevant, false, 'common words carry no evidential weight');
+});
+
+// A claim that names nothing cannot be corroborated by anything.
+//
+// The adversarial item fab-04 reads "Secret chemical leak forces overnight
+// evacuation of three districts". It names no district, no town, no company and
+// no figure. The gate used to fall back to vocabulary overlap when a claim had
+// no anchors, and a real story about a chemical plant leak in Ohio cleared it on
+// chemical, leak, overnight and evacuation — four shared terms, score 0.5. The
+// pipeline then reported the invented leak as corroborated by multiple
+// independent sources, which is the worst error it can make.
+test('an unanchored claim cannot be corroborated by same-topic coverage', () => {
+  const claim = 'A secret chemical leak forced the overnight evacuation of three districts.';
+  const sameTopic = {
+    title: 'Chemical plant leak prompts overnight evacuation in Ohio',
+    description: 'Residents were evacuated after a leak at a chemical facility.'
+  };
+
+  const verdict = isRelevant(claim, sameTopic);
+  assert.equal(verdict.relevant, false, 'topic overlap is not event identity');
+  assert.equal(verdict.unanchored, true, 'the reason must be recorded, not just the refusal');
+});
+
+test('an anchored claim still matches coverage of the same event', () => {
+  const claim = 'A Mississippi grand jury declined to bring charges in the death of Nolan Wells.';
+  const verdict = isRelevant(claim, {
+    title: 'Grand jury declines charges in Nolan Wells death',
+    description: 'A Mississippi grand jury found no evidence to bring charges.'
+  });
+  assert.equal(verdict.relevant, true);
+  assert.ok(verdict.sharedAnchors.includes('nolan'));
+});
+
+test('an anchored claim rejects coverage of a different event', () => {
+  const claim = 'A Mississippi grand jury declined to bring charges in the death of Nolan Wells.';
+  const verdict = isRelevant(claim, {
+    title: 'Wildfire prompts evacuation in northern California',
+    description: 'Residents left their homes overnight.'
+  });
+  assert.equal(verdict.relevant, false);
+});
+
+// The reader is told why, because "discarded for not being about this claim"
+// understates a claim that could never have been matched in the first place.
+test('the reason given distinguishes unmatchable from unmatched', () => {
+  const unanchored = filterRelevant(
+    'A secret chemical leak forced an overnight evacuation of three districts.',
+    [{ source: 'Somewhere', title: 'Chemical leak prompts overnight evacuation', description: '' }]);
+  assert.match(unanchored.note, /names no person, place, organisation or figure/i);
+
+  const anchored = filterRelevant(
+    'A Mississippi grand jury declined to charge anyone over the death of Nolan Wells.',
+    [{ source: 'Somewhere', title: 'Wildfire prompts evacuation in California', description: '' }]);
+  assert.match(anchored.note, /not being about this claim/i);
 });

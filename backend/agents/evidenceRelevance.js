@@ -91,22 +91,39 @@ const isRelevant = (claim, evidence) => {
   const anchors = anchorTerms(claim);
   const sharedAnchors = [...anchors].filter(term => evidenceTerms.has(term));
 
-  // A claim with almost no distinctive vocabulary cannot be matched this way, so
-  // the gate stands aside rather than rejecting everything. Being unable to
-  // check relevance is not evidence of irrelevance.
-  if (claimTerms.size < MIN_SHARED_TERMS) {
-    return { relevant: true, shared, sharedAnchors, score: 0, unchecked: true };
-  }
-
   const score = claimTerms.size ? shared.length / claimTerms.size : 0;
 
+  // A claim that names nothing cannot be corroborated by anything.
+  //
+  // Anchors are what tie a claim to one event: a place, a person, a body, a
+  // number. Without one, a claim describes a KIND of event rather than an
+  // event, and no retrieved article can confirm it — only something of the
+  // same kind, somewhere.
+  //
+  // This branch used to accept a share of ordinary vocabulary instead, and the
+  // adversarial set shows what that buys. "A secret chemical leak forced the
+  // overnight evacuation of three districts" names no district and no town, and
+  // it matched a real story about a chemical plant leak in Ohio on the words
+  // chemical, leak, overnight and evacuation — a score of 0.5 and four shared
+  // terms. The pipeline reported the invented leak as corroborated by multiple
+  // independent sources, which is the worst error this system can make.
+  //
+  // Topic overlap is not event identity. Where identity cannot be established
+  // the honest outcome is that the claim stays unverified, which is what the
+  // system is built to say.
+  if (anchors.size === 0) {
+    return {
+      relevant: false,
+      shared,
+      sharedAnchors,
+      score: Math.round(score * 100) / 100,
+      unanchored: true
+    };
+  }
+
   // With anchors present, one of them must appear: the evidence has to be about
-  // the same place, body, person or quantity. Without anchors there is nothing
-  // to pin to, so a substantial share of the claim's vocabulary is required
-  // instead.
-  const relevant = anchors.size > 0
-    ? (sharedAnchors.length >= 1 && shared.length >= MIN_SHARED_TERMS)
-    : (shared.length >= MIN_SHARED_TERMS && score >= 0.3);
+  // the same place, body, person or quantity.
+  const relevant = sharedAnchors.length >= 1 && shared.length >= MIN_SHARED_TERMS;
 
   return { relevant, shared, sharedAnchors, score: Math.round(score * 100) / 100 };
 };
@@ -120,8 +137,11 @@ const filterRelevant = (claim, evidenceItems = []) => {
   const kept = [];
   const dropped = [];
 
+  let unanchored = false;
+
   for (const item of evidenceItems) {
     const verdict = isRelevant(claim, item);
+    if (verdict.unanchored) unanchored = true;
     if (verdict.relevant) {
       kept.push({ ...item, sharedTerms: verdict.shared });
     } else {
@@ -129,13 +149,15 @@ const filterRelevant = (claim, evidenceItems = []) => {
     }
   }
 
-  return {
-    kept,
-    dropped,
-    note: dropped.length
+  const note = unanchored && dropped.length
+    ? 'This claim names no person, place, organisation or figure, so no retrieved '
+      + `article can be shown to be about it. ${dropped.length} `
+      + `article${dropped.length > 1 ? 's were' : ' was'} set aside.`
+    : dropped.length
       ? `${dropped.length} retrieved article${dropped.length > 1 ? 's were' : ' was'} discarded for not being about this claim.`
-      : null
-  };
+      : null;
+
+  return { kept, dropped, unanchored, note };
 };
 
 module.exports = { isRelevant, filterRelevant, distinctiveTerms, anchorTerms, MIN_SHARED_TERMS };
