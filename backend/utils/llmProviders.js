@@ -288,17 +288,41 @@ const loadRouting = () => {
 
 /** Test seam: forget the cached table so a freshly written one is picked up. */
 const reloadRouting = () => {
+  announcedSource = false;
   delete require.cache[require.resolve('../data/taskRouting.json')];
   routingTable = null;
 };
 
+const envOrder = () => String(process.env.LLM_PROVIDER || '')
+  .split(',').map(n => n.trim().toLowerCase()).filter(Boolean);
+
+let announcedSource = false;
+
 const orderFor = (task) => {
+  // LLM_PROVIDER wins when it is set.
+  //
+  // It used to lose to the routing table's default, which meant an operator who
+  // edited .env to change providers saw no effect and no explanation — the
+  // table silently overrode them. A measured table is the better default, but
+  // it is a default, and an explicit setting has to beat it or the setting is
+  // a lie. Per-task entries still apply within whatever order is chosen, since
+  // those encode which provider can actually do the task.
+  const explicit = envOrder();
   const table = loadRouting();
+
+  if (!announcedSource) {
+    announcedSource = true;
+    console.log(explicit.length
+      ? `Provider order from LLM_PROVIDER: ${explicit.join(' -> ')} (routing table ignored).`
+      : `Provider order from data/taskRouting.json${table.generatedAt ? `, measured ${table.generatedAt.slice(0, 10)}` : ''}.`);
+  }
+
+  if (explicit.length) return explicit;
+
   const entry = task && table.tasks && table.tasks[task];
   if (entry && Array.isArray(entry.chain) && entry.chain.length) return entry.chain;
   if (Array.isArray(table.default) && table.default.length) return table.default;
-  return String(process.env.LLM_PROVIDER || 'nim')
-    .split(',').map(n => n.trim().toLowerCase()).filter(Boolean);
+  return ['nim'];
 };
 
 /**
