@@ -262,14 +262,52 @@ const PROVIDERS = { nim, gemini, ollama };
  *
  * @returns {Array<Object>} providers in the order they should be tried
  */
-const resolveProviderChain = () => {
-  const requested = String(process.env.LLM_PROVIDER || 'nim')
-    .split(',')
-    .map(name => name.trim().toLowerCase())
-    .filter(Boolean);
+/**
+ * Per-task routing, measured rather than assumed.
+ *
+ * A local model is not uniformly better or worse than a hosted one: it is
+ * free, private and always available, and it is weaker at tasks needing a
+ * taxonomy held in mind or several documents compared at once. Which is which
+ * is a question with an answer, so eval/benchmarkProviders.js measures every
+ * task on every configured provider — valid-JSON rate, agreement with the
+ * hosted reference, latency — and writes the table this reads.
+ *
+ * Absent the table every task uses the configured order, so the system behaves
+ * exactly as before until the measurement has been made.
+ */
+let routingTable = null;
+const loadRouting = () => {
+  if (routingTable !== null) return routingTable;
+  try {
+    routingTable = require('../data/taskRouting.json');
+  } catch (_) {
+    routingTable = { tasks: {} };
+  }
+  return routingTable;
+};
 
+/** Test seam: forget the cached table so a freshly written one is picked up. */
+const reloadRouting = () => {
+  delete require.cache[require.resolve('../data/taskRouting.json')];
+  routingTable = null;
+};
+
+const orderFor = (task) => {
+  const table = loadRouting();
+  const entry = task && table.tasks && table.tasks[task];
+  if (entry && Array.isArray(entry.chain) && entry.chain.length) return entry.chain;
+  if (Array.isArray(table.default) && table.default.length) return table.default;
+  return String(process.env.LLM_PROVIDER || 'nim')
+    .split(',').map(n => n.trim().toLowerCase()).filter(Boolean);
+};
+
+/**
+ * @param {string} [task] the caller's task label, e.g. 'clickbait'
+ * @returns {Array} providers to try, in order
+ */
+const resolveProviderChain = (task) => {
   const chain = [];
-  for (const name of requested) {
+  for (const name of orderFor(task)) {
     const provider = PROVIDERS[name];
     if (provider && provider.isConfigured() && !chain.includes(provider)) {
       chain.push(provider);
@@ -301,6 +339,7 @@ const resolveConcurrency = () => {
 module.exports = {
   PROVIDERS,
   resolveProviderChain,
+  reloadRouting,
   resolveConcurrency,
   isRetired,
   isOverloaded,

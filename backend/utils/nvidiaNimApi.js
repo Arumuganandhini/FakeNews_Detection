@@ -69,7 +69,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * @returns {Promise<string>} the reply text
  */
 const callNimApi = async (prompt, options = {}) => {
-  const providers = resolveProviderChain();
+  // The caller's label doubles as the routing key: which provider leads for
+  // this task is a measured property of the task (see data/taskRouting.json),
+  // not a global setting.
+  const providers = resolveProviderChain(options.label);
   if (!providers.length) {
     throw new Error(
       'No language model provider is configured. Set NIM_API_KEY (or GEMINI_API_KEY) in your backend .env file.'
@@ -395,6 +398,7 @@ const callNimApiJson = async (prompt, options = {}) => {
       // step-by-step reasoning and no object, which the pipeline could only
       // report as "the check did not run".
       json: true,
+      label,
       maxTokens: attempt === 0 ? baseTokens : Math.round(baseTokens * 1.75)
     };
 
