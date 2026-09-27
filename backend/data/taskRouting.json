@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-27T18:16:55.246Z",
+  "generatedAt": "2026-09-27T18:33:19.933Z",
   "method": "3 runs per task per provider on fixed inputs; a reply counts as valid only when it parses and carries the keys the caller requires, and a content factor that fell back to the pattern matcher counts as invalid.",
   "thresholds": {
     "minValidity": 0.8,
@@ -19,28 +19,31 @@
         "nim",
         "gemini"
       ],
-      "reason": "local valid on 100% of replies and within 0.33 of nim",
+      "reason": "local valid on 100% of replies, within 0.17 of nim",
       "measured": {
         "nim": {
           "validity": 1,
-          "medianMs": 4379,
-          "meanScore": 1.67,
+          "correctness": null,
+          "medianMs": 7988,
+          "meanScore": 1.83,
           "runs": 3
         },
         "gemini": {
           "validity": 1,
-          "medianMs": 3905,
-          "meanScore": 0.5,
+          "correctness": null,
+          "medianMs": 3080,
+          "meanScore": 1.67,
           "runs": 3
         },
         "ollama": {
           "validity": 1,
-          "medianMs": 1603,
+          "correctness": null,
+          "medianMs": 1797,
           "meanScore": 2,
           "runs": 3
         }
       },
-      "scoreDrift": 0.33
+      "scoreDrift": 0.17
     },
     "bias": {
       "chain": [
@@ -48,23 +51,26 @@
         "nim",
         "gemini"
       ],
-      "reason": "local valid on 100% of replies and within 0 of nim",
+      "reason": "local valid on 100% of replies, within 0 of nim",
       "measured": {
         "nim": {
           "validity": 0.67,
-          "medianMs": 10199,
+          "correctness": null,
+          "medianMs": 7970,
           "meanScore": 1,
           "runs": 3
         },
         "gemini": {
           "validity": 1,
-          "medianMs": 2040,
-          "meanScore": 0.5,
+          "correctness": null,
+          "medianMs": 10365,
+          "meanScore": 1,
           "runs": 3
         },
         "ollama": {
           "validity": 1,
-          "medianMs": 4129,
+          "correctness": null,
+          "medianMs": 4361,
           "meanScore": 1,
           "runs": 3
         }
@@ -77,23 +83,26 @@
         "nim",
         "gemini"
       ],
-      "reason": "local valid on 100% of replies and within 0 of nim",
+      "reason": "local valid on 100% of replies, within 0 of nim",
       "measured": {
         "nim": {
           "validity": 1,
-          "medianMs": 25319,
+          "correctness": null,
+          "medianMs": 11263,
           "meanScore": 2.2,
           "runs": 3
         },
         "gemini": {
           "validity": 1,
-          "medianMs": 2051,
-          "meanScore": 2.2,
+          "correctness": null,
+          "medianMs": 39487,
+          "meanScore": 4.8,
           "runs": 3
         },
         "ollama": {
           "validity": 1,
-          "medianMs": 3519,
+          "correctness": null,
+          "medianMs": 3537,
           "meanScore": 2.2,
           "runs": 3
         }
@@ -106,23 +115,26 @@
         "nim",
         "gemini"
       ],
-      "reason": "local valid on 100% of replies and within 2 of nim",
+      "reason": "local valid on 100% of replies, within 2 of nim",
       "measured": {
         "nim": {
           "validity": 1,
-          "medianMs": 18493,
+          "correctness": null,
+          "medianMs": 7743,
           "meanScore": 8,
           "runs": 3
         },
         "gemini": {
           "validity": 1,
-          "medianMs": 6067,
+          "correctness": null,
+          "medianMs": 9226,
           "meanScore": 8,
           "runs": 3
         },
         "ollama": {
           "validity": 1,
-          "medianMs": 1748,
+          "correctness": null,
+          "medianMs": 1886,
           "meanScore": 10,
           "runs": 3
         }
@@ -139,19 +151,22 @@
       "measured": {
         "nim": {
           "validity": 1,
-          "medianMs": 1831,
+          "correctness": null,
+          "medianMs": 4183,
           "meanScore": null,
           "runs": 3
         },
         "gemini": {
           "validity": 1,
-          "medianMs": 1310,
+          "correctness": null,
+          "medianMs": 3319,
           "meanScore": null,
           "runs": 3
         },
         "ollama": {
           "validity": 1,
-          "medianMs": 665,
+          "correctness": null,
+          "medianMs": 714,
           "meanScore": null,
           "runs": 3
         }
@@ -168,19 +183,22 @@
       "measured": {
         "nim": {
           "validity": 0.67,
-          "medianMs": 21604,
+          "correctness": null,
+          "medianMs": 9003,
           "meanScore": null,
           "runs": 3
         },
         "gemini": {
           "validity": 1,
-          "medianMs": 1354,
+          "correctness": null,
+          "medianMs": 5301,
           "meanScore": null,
           "runs": 3
         },
         "ollama": {
           "validity": 1,
-          "medianMs": 902,
+          "correctness": null,
+          "medianMs": 884,
           "meanScore": null,
           "runs": 3
         }
@@ -196,20 +214,87 @@
       "reason": "local valid on 100% of replies",
       "measured": {
         "nim": {
-          "validity": 1,
-          "medianMs": 21780,
+          "validity": 0.67,
+          "correctness": null,
+          "medianMs": 39155,
           "meanScore": null,
           "runs": 3
         },
         "gemini": {
-          "validity": 1,
-          "medianMs": 1394,
+          "validity": 0.33,
+          "correctness": null,
+          "medianMs": 25082,
           "meanScore": null,
           "runs": 3
         },
         "ollama": {
           "validity": 1,
-          "medianMs": 1709,
+          "correctness": null,
+          "medianMs": 1621,
+          "meanScore": null,
+          "runs": 3
+        }
+      },
+      "scoreDrift": null
+    },
+    "premise check": {
+      "chain": [
+        "nim",
+        "gemini",
+        "ollama"
+      ],
+      "reason": "local returns well-formed replies but got the known answer right 0% of the time, below the 80% gate",
+      "measured": {
+        "nim": {
+          "validity": 1,
+          "correctness": 1,
+          "medianMs": 10873,
+          "meanScore": null,
+          "runs": 3
+        },
+        "gemini": {
+          "validity": 1,
+          "correctness": 1,
+          "medianMs": 10754,
+          "meanScore": null,
+          "runs": 3
+        },
+        "ollama": {
+          "validity": 1,
+          "correctness": 0,
+          "medianMs": 2412,
+          "meanScore": null,
+          "runs": 3
+        }
+      },
+      "scoreDrift": null
+    },
+    "coverage keywords": {
+      "chain": [
+        "ollama",
+        "nim",
+        "gemini"
+      ],
+      "reason": "local valid on 100% of replies",
+      "measured": {
+        "nim": {
+          "validity": 1,
+          "correctness": null,
+          "medianMs": 5428,
+          "meanScore": null,
+          "runs": 3
+        },
+        "gemini": {
+          "validity": 1,
+          "correctness": null,
+          "medianMs": 3413,
+          "meanScore": null,
+          "runs": 3
+        },
+        "ollama": {
+          "validity": 1,
+          "correctness": null,
+          "medianMs": 266,
           "meanScore": null,
           "runs": 3
         }
@@ -222,23 +307,26 @@
         "nim",
         "gemini"
       ],
-      "reason": "local valid on 100% of replies",
+      "reason": "local valid on 100% of replies, correct on 100%",
       "measured": {
         "nim": {
           "validity": 1,
-          "medianMs": 7276,
+          "correctness": 1,
+          "medianMs": 3307,
           "meanScore": null,
           "runs": 3
         },
         "gemini": {
           "validity": 1,
-          "medianMs": 2625,
+          "correctness": 1,
+          "medianMs": 1739,
           "meanScore": null,
           "runs": 3
         },
         "ollama": {
           "validity": 1,
-          "medianMs": 1032,
+          "correctness": 1,
+          "medianMs": 1043,
           "meanScore": null,
           "runs": 3
         }
