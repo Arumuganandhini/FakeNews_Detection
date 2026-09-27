@@ -157,3 +157,67 @@ test('a different person with the same name is not a contradiction', async () =>
     if (realWiki) require.cache[wikiPath] = realWiki; else delete require.cache[wikiPath];
   }
 });
+
+// Run checkPremises against a fixed encyclopedia entry and a fixed judge reply.
+const withJudge = async (entry, reply, title, text) => {
+  const nimPath = require.resolve('../utils/nvidiaNimApi');
+  const wikiPath = require.resolve('../utils/wikipedia');
+  const agentPath = require.resolve('../agents/referenceCheck');
+  const realNim = require.cache[nimPath];
+  const realWiki = require.cache[wikiPath];
+  require.cache[wikiPath] = { id: wikiPath, filename: wikiPath, loaded: true,
+    exports: { fetchWikipediaContent: async () => ([entry]), ReferenceUnavailableError: class extends Error {} } };
+  require.cache[nimPath] = { id: nimPath, filename: nimPath, loaded: true,
+    exports: { callNimApiJson: async () => reply, callNimApi: async () => '', extractJson: () => ({}) } };
+  delete require.cache[agentPath];
+  try {
+    return await require(agentPath).checkPremises(title, text);
+  } finally {
+    delete require.cache[agentPath];
+    if (realNim) require.cache[nimPath] = realNim; else delete require.cache[nimPath];
+    if (realWiki) require.cache[wikiPath] = realWiki; else delete require.cache[wikiPath];
+  }
+};
+
+const POPE = { title: 'Pope Leo XIV', url: 'https://en.wikipedia.org/wiki/Pope_Leo_XIV',
+  content: 'Born in Chicago, United States, Prevost became a friar in the Order of Saint Augustine in 1977.' };
+const LOURDES_TITLE = 'Pope Leo XIV says mass before hundreds of thousands of faithful in Lourdes';
+const LOURDES_TEXT = 'Pope Leo XIV said mass in Lourdes. One woman said the Pope was a compatriot because his ancestors came from the region.';
+
+// Measured on a genuine AP video: one run in eight set "his ancestors came from
+// the region" against "Born in Chicago" and called the report FAKE.
+test('statements that can both be true are not a contradiction', async () => {
+  const result = await withJudge(POPE, {
+    same_subject: true, contradicts: true, both_can_be_true: true, asserted_by: 'article',
+    article_states: 'Pope Leo XIV has ancestors from the Bigorre region.',
+    reference_states: 'Born in Chicago, United States, Prevost became a friar'
+  }, LOURDES_TITLE, LOURDES_TEXT);
+  assert.equal(result.contradictions.length, 0);
+});
+
+test('something only a quoted person says is not the report asserting it', async () => {
+  const result = await withJudge(POPE, {
+    same_subject: true, contradicts: true, both_can_be_true: false, asserted_by: 'quoted',
+    article_states: 'A woman says the Pope was born in the region.',
+    reference_states: 'Born in Chicago, United States, Prevost became a friar'
+  }, LOURDES_TITLE, LOURDES_TEXT);
+  assert.equal(result.contradictions.length, 0);
+});
+
+// The guard must narrow the channel, not close it. Without this test a guard
+// that rejected every contradiction would pass everything above.
+test('a genuine, mutually exclusive premise in the article voice is still caught', async () => {
+  const result = await withJudge({
+    title: 'Rahul Gandhi', url: 'https://en.wikipedia.org/wiki/Rahul_Gandhi',
+    content: 'Rahul Gandhi is an Indian politician who is serving as the 12th leader of the Opposition in Lok Sabha.'
+  }, {
+    same_subject: true, contradicts: true, both_can_be_true: false, asserted_by: 'article',
+    article_states: 'Rahul Gandhi is the Prime Minister.',
+    reference_states: 'serving as the 12th leader of the Opposition in Lok Sabha'
+  }, 'Prime Minister Rahul Gandhi announces nationwide fuel subsidy',
+  'Prime Minister Rahul Gandhi announced a nationwide fuel subsidy on Tuesday in New Delhi.');
+  // The mock answers every name it is asked about, so the count follows the
+  // number of names; what matters is that the contradiction gets through.
+  assert.ok(result.contradictions.length >= 1, 'the premise channel still fires');
+  assert.equal(result.status, 'contradicted');
+});

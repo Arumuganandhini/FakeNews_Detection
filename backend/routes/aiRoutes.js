@@ -180,7 +180,7 @@ router.post('/summarize', async (req, res) => {
 // Results are cached by article URL so the analysis runs once per article
 // and every later reader gets it instantly.
 router.post('/trust-analysis', async (req, res) => {
-  const { title, content, source, url } = req.body;
+  const { title, content, source, url, publishedAt } = req.body;
   if (!title) {
     return res.status(400).json({ error: 'Article title is required.' });
   }
@@ -211,6 +211,7 @@ router.post('/trust-analysis', async (req, res) => {
           content: limitText(resolved.text || content, TEXT_BUDGET.factors),
           source,
           url,
+          publishedAt: publishedAt || null,
           textCoverage: resolved.source
         }));
       if (url) {
@@ -285,7 +286,11 @@ router.post('/analyze-content', async (req, res) => {
           url: article.url,
           modality: 'article',
           provenance: null,
-          ingestNotes: []
+          ingestNotes: [],
+          // Only a date the page actually carried. The extractor falls back to
+          // "now" for its own callers; here a guessed date would make every
+          // undated article look too recent to check.
+          publishedAt: article.publishedAtKnown ? article.publishedAt : null
         };
       }
     }
@@ -315,6 +320,7 @@ router.post('/analyze-content', async (req, res) => {
       url: ingested.url,
       provenance: ingested.provenance,
       modality: ingested.modality,
+      publishedAt: ingested.publishedAt || null,
       textCoverage: 'full'
     });
 
@@ -340,7 +346,10 @@ router.post('/analyze-content', async (req, res) => {
     if (err.code === 'BAD_URL') {
       return res.status(400).json({ error: err.message });
     }
-    if (err.code === 'FETCH_BLOCKED') {
+    // A host that does not resolve, a page that is not an article, a body too
+    // short to check: each is a fact about the link, and each already carries
+    // a message written for the reader. Only an unrecognised fault is a 500.
+    if (err.code === 'FETCH_BLOCKED' || err.code === 'FETCH_FAILED') {
       return res.status(422).json({ error: err.message, canRetryWith: ['text', 'screenshot'] });
     }
     console.error('Content analysis failed:', err.message);

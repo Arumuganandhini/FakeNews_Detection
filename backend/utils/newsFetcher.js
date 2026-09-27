@@ -1,6 +1,23 @@
 // backend/utils/newsFetcher.js
 const axios = require('axios');
+
 require('dotenv').config();
+
+/**
+ * How far behind live the news index runs, in hours.
+ *
+ * The developer plan does not serve today's articles. Measured on 2026-09-28,
+ * the freshest item the index would return for any query was 30.5 hours old.
+ * A story published inside that window therefore draws no corroboration
+ * however many outlets carried it, and silence from the index says nothing
+ * whatever about it. Any code that reads an absence of coverage as evidence
+ * has to know this number; agents/verdictEngine.js is the one that does.
+ *
+ * Set NEWS_INDEX_LAG_HOURS to 0 on a plan that serves live articles.
+ */
+const INDEX_LAG_HOURS = Number.isFinite(Number(process.env.NEWS_INDEX_LAG_HOURS))
+  ? Number(process.env.NEWS_INDEX_LAG_HOURS)
+  : 24;
 
 /**
  * Turn a NewsAPI failure into something a reader can act on.
@@ -42,7 +59,7 @@ const describeNewsApiError = (err) => {
 };
 
 const fetchTopNews = async (category = 'general') => {
-  const apiKey = process.env.NEWS_API_KEY;
+const apiKey = process.env.NEWS_API_KEY;
 
   const url = `https://newsapi.org/v2/top-headlines?category=${category}&language=en&pageSize=30&apiKey=${apiKey}`;
 
@@ -165,4 +182,4 @@ const searchCoverageBroadening = async (query, excludeSourceName = '', pageSize 
   return best;
 };
 
-module.exports = { fetchTopNews, searchNewsCoverage, searchCoverageBroadening, SearchUnavailableError };
+module.exports = { INDEX_LAG_HOURS, fetchTopNews, searchNewsCoverage, searchCoverageBroadening, SearchUnavailableError };

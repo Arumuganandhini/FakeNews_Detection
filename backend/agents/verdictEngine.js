@@ -33,7 +33,18 @@
 // same evidence it returns the same verdict, and the rule that fired is named
 // in the output.
 
+const { INDEX_LAG_HOURS } = require('../utils/newsFetcher');
 const { analyseIndependence } = require('./independence');
+
+
+/** "two hours", "three days" — enough for the reader to judge the abstention. */
+const describeAge = (hours) => {
+  if (hours === null || !Number.isFinite(hours)) return 'less than a day';
+  if (hours < 1) return 'less than an hour';
+  if (hours < 2) return 'about an hour';
+  if (hours < 36) return `about ${Math.round(hours)} hours`;
+  return `about ${Math.round(hours / 24)} days`;
+};
 
 /**
  * Verdict classes. `ceiling` is the highest trust score an article in this
@@ -125,8 +136,14 @@ const looksHighImpact = (text) => HIGH_IMPACT_PATTERNS.some(pattern => pattern.t
  */
 const buildEvidenceLedger = ({
   claims = [], sourceResult = {}, transparencyResult = {}, manipulationResult = {}, title = '',
-  verificationStatus = 'unverified', premiseResult = null
+  verificationStatus = 'unverified', premiseResult = null,
+  publishedAt = null, indexLagHours = INDEX_LAG_HOURS
 }) => {
+  // How old the story is, when the page told us. An unknown date is left
+  // unknown: guessing "now" would make every undated article look too recent
+  // to check, which is a worse error than the one being fixed.
+  const ageMs = publishedAt ? Date.now() - new Date(publishedAt).getTime() : NaN;
+  const articleAgeHours = Number.isFinite(ageMs) && ageMs >= 0 ? ageMs / 3600000 : null;
   const perClaim = claims.map(claim => {
     const support = analyseIndependence(claim.supportingEvidence || []);
     const contradiction = analyseIndependence(claim.contradictingEvidence || []);
@@ -152,13 +169,27 @@ const buildEvidenceLedger = ({
     null
   );
 
+  const independentSupport = best('independentSupport');
+  const independentContradiction = best('independentContradiction');
+
+  // The index cannot have seen this story yet, and it found nothing. Those two
+  // facts together mean the corroboration check has no information to give,
+  // which is the same position as a check that could not run at all.
+  const tooRecentToCorroborate = articleAgeHours !== null
+    && articleAgeHours < indexLagHours
+    && independentSupport === 0
+    && independentContradiction === 0;
+
   return {
     checkableClaimCount: claims.length,
     // "We found no claim worth checking" and "the check could not run" look
     // identical in the claim list and mean opposite things. Without this flag a
     // model outage would silently reclassify every article as commentary, which
     // carries a far higher ceiling than an unverified report.
-    verificationRan: verificationStatus !== 'error',
+    verificationRan: verificationStatus !== 'error' && !tooRecentToCorroborate,
+    tooRecentToCorroborate,
+    articleAgeHours,
+    indexLagHours,
     // A reference work contradicting something the article states about a named
     // subject. Distinct from a news contradiction, and not merged with it: an
     // encyclopedia is not an independent newsroom reporting an event, it is a
@@ -166,8 +197,8 @@ const buildEvidenceLedger = ({
     // than to what happened.
     premiseContradictions: premiseResult?.contradictions || [],
     premiseStatus: premiseResult?.status || 'not-run',
-    independentSupport: best('independentSupport'),
-    independentContradiction: best('independentContradiction'),
+    independentSupport,
+    independentContradiction,
     perClaim,
     mergeNotes: [...new Set(perClaim.flatMap(c => [...c.support.mergeNotes, ...c.contradiction.mergeNotes]))],
     rawSupportingArticles: perClaim.reduce((sum, c) => sum + c.support.itemCount, 0),
@@ -269,6 +300,26 @@ const decideVerdict = (ledger) => {
   // as "nothing to verify": an unrun check is an absence of knowledge, and the
   // report says so rather than quietly reclassifying the article as commentary.
   if (!ledger.verificationRan) {
+    // R3a — The story is newer than anything the index we search carries, so
+    // its silence is not a finding.
+    //
+    // Measured: a BBC report of five terrorism arrests near RAF Fairford, two
+    // hours old and carried by every outlet in the country, drew no
+    // corroboration at all, because the index serves nothing published in the
+    // last day. The rules below then read that absence as evidence and said
+    // "No other outlet is reporting this — and a story this big would normally
+    // be everywhere", at three per cent. Every word of that was wrong, and it
+    // is the most damaging thing this system can say about a true story.
+    //
+    // This sits below R5 and R6: corroboration that WAS found still counts,
+    // and only a search that could not have succeeded abstains.
+    if (ledger.tooRecentToCorroborate) {
+      return decide('unverified', 'too-recent-to-corroborate', [
+        `This story is ${describeAge(ledger.articleAgeHours)} old, and the news index we search runs about ${Math.round(ledger.indexLagHours)} hours behind live.`,
+        'Nothing was found reporting it elsewhere, but that is the limit of what we can see rather than evidence about the story.',
+        'The writing checks below still ran. Checking again tomorrow will give a real answer.'
+      ], 'Published too recently for us to check it against other outlets yet.');
+    }
     return decide('unverified', 'verification-unavailable', [
       'We could not search other outlets just now, so nothing about this story has been confirmed either way.',
       'The writing checks below still ran, but how an article is written says nothing about whether it happened.'
@@ -410,6 +461,9 @@ const summarise = (verdict, ledger) => {
       return 'This argues a position rather than reporting events, so there is nothing to check.';
     case 'unverified':
     default:
+      // The search did run for a too-recent story; it simply could not have
+      // found anything. Saying it failed would be a different untruth.
+      if (ledger.tooRecentToCorroborate) return 'Too recent to check against other outlets yet — our news index runs about a day behind.';
       if (!ledger.verificationRan) return 'We could not complete the search, so nothing has been checked.';
       return ledger.highImpact
         ? 'No other outlet is reporting this — and a story this big would normally be everywhere.'

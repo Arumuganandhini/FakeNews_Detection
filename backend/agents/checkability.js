@@ -79,7 +79,21 @@ const findAnchors = (text) => {
  *            missing: string[], anchors: Object, anchorCount: number}}
  */
 const assessCheckability = (text, title = '') => {
-  const combined = `${title} ${text}`.trim();
+  // A headline is a sentence of its own, and joining it to the body with a
+  // bare space makes the body's first word mid-sentence — so its grammatical
+  // capital gets read as a proper noun by findAnchors below.
+  //
+  // Measured: the forwarded message "Wake up. They are hiding the truth from
+  // you. Wake up before it is too late…" ingests with the title "Wake up",
+  // which joined to "Wake up before…" put the second "Wake" at index 1 of the
+  // first sentence. That single phantom anchor was enough to carry pure
+  // exhortation past this gate and into a CANNOT VERIFY verdict — a verdict on
+  // content that asserts nothing, which is what this gate exists to prevent.
+  const head = String(title || '').trim();
+  const body = String(text || '').trim();
+  const combined = head
+    ? `${/[.!?]$/.test(head) ? head : `${head}.`} ${body}`.trim()
+    : body;
   const words = combined.split(/\s+/).filter(Boolean);
   const anchors = findAnchors(combined);
   const anchorCount = anchors.names.length + anchors.numbers.length + anchors.dates.length;

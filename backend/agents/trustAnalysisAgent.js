@@ -221,7 +221,7 @@ const buildPlainLanguage = ({
  * @param {Object} article - { title, content, source, url }
  * @returns {Promise<Object>} structured trust report
  */
-const analyzeTrust = async ({ title, content, source, url, textCoverage, onProgress, provenance, modality }) => {
+const analyzeTrust = async ({ title, content, source, url, textCoverage, onProgress, provenance, modality, publishedAt }) => {
   // Whether we are reading the article or the feed's two-line summary of it.
   // Checks that need the body of the piece cannot be reported as findings
   // about the piece when all we have is the summary.
@@ -353,7 +353,10 @@ const analyzeTrust = async ({ title, content, source, url, textCoverage, onProgr
     sourceResult,
     transparencyResult,
     manipulationResult,
-    title
+    title,
+    // So the ledger can tell "no outlet reports this" apart from "the index we
+    // search does not carry anything this recent". See verdictEngine R3a.
+    publishedAt
   });
 
   const assessment = assessProbability({

@@ -233,11 +233,19 @@ The encyclopedia will not mention most of what the article says. That is normal 
 Return a JSON object with these keys:
 - "same_subject": true when the entry is about the same ${entity} the article means, false when it is a different person or thing that happens to share the name.
 - "contradicts": true or false.
+- "both_can_be_true": true when the article's statement and the entry could both be true of the same ${entity} at once, false only when accepting one means rejecting the other. Being born in one place and having ancestors from another can both be true; holding an office and never having held it cannot.
+- "asserted_by": "article" when the article states the fact in its own voice, "quoted" when it is only something a person interviewed or quoted in the article says.
 - "article_states": what the article says about ${entity}, in one short sentence.
 - "reference_states": the conflicting sentence copied exactly from the encyclopedia entry, or an empty string when there is no conflict.`;
 
   try {
-    const result = await callNimApiJson(prompt, { maxTokens: 400, requiredKeys: ['contradicts'], label: 'premise check' });
+    // The hosted model this task is routed to reasons in prose before it
+    // answers — about 2,000 characters on this prompt, measured — and at 450
+    // tokens three replies in four were cut off before the JSON began. The
+    // judgement then counted as failed, the headline subject went unchecked,
+    // and a false premise the channel exists to catch got through on one run
+    // in five. The budget has to cover the reasoning, not just the answer.
+    const result = await callNimApiJson(prompt, { maxTokens: 1400, requiredKeys: ['contradicts', 'both_can_be_true'], label: 'premise check' });
 
     // A name is not an identity.
     //
@@ -255,6 +263,23 @@ Return a JSON object with these keys:
         article_states: String(result.article_states || ''),
         reference_states: '' };
     }
+
+    // Difference is not contradiction, and a quotation is not the report.
+    //
+    // Measured on a genuine Associated Press video of the Pope's mass at
+    // Lourdes: a woman interviewed in French says the Pope is "our compatriot,
+    // since his ancestors come from" the region. In one run of eight the judge
+    // set that against "Born in Chicago" in his entry and reported a
+    // contradiction, and the report was called FAKE. Ancestry in France and
+    // birth in Chicago are both true, and a bystander's remark is not something
+    // the report asserts. An accusation now needs statements that cannot both
+    // hold, made in the article's own voice.
+    if (result && (result.both_can_be_true !== false || result.asserted_by === 'quoted')) {
+      return { contradicts: false, compatible: result.both_can_be_true !== false,
+        quotedOnly: result.asserted_by === 'quoted',
+        articleStates: String(result.article_states || ''), referenceStates: '' };
+    }
+
     const referenceStates = String(result.reference_states || '').trim();
 
     // The model must ground a contradiction in the reference text. An assertion

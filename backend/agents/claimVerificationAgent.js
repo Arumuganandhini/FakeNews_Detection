@@ -6,7 +6,21 @@ const { callNimApiJson } = require('../utils/nvidiaNimApi');
 const { searchCoverageBroadening } = require('../utils/newsFetcher');
 const { getSourceReputation } = require('./sourceReputationAgent');
 const { isSearchable } = require('../utils/language');
-const { filterRelevant } = require('./evidenceRelevance');
+const { filterRelevant, anchorTerms, distinctiveTerms } = require('./evidenceRelevance');
+
+/**
+ * Search terms for a claim the model described but did not supply keywords for.
+ *
+ * Proper nouns and figures first, because those are what pin a claim to one
+ * event; ordinary content words only when the claim carries no anchors, which
+ * is the case where corroboration was never going to establish anything
+ * anyway.
+ */
+const deriveKeywords = (claim) => {
+  const anchors = [...anchorTerms(claim)];
+  const terms = anchors.length >= 2 ? anchors : [...distinctiveTerms(claim)];
+  return terms.slice(0, 4).join(' ');
+};
 
 /**
  * Step 1: extract up to `maxClaims` checkable factual claims plus search keywords.
@@ -19,10 +33,16 @@ const extractClaims = async (title, content, maxClaims = 2, language = null) => 
   // only in the original language would find nothing and conclude — wrongly —
   // that no other outlet covers the story. English search terms are what make
   // the corroboration check work across languages.
+  // Described in words and formatted as bullets, matching the "claim" line.
+  // The earlier version rendered these as indented `"key": "<placeholder>"`
+  // lines outside the list, and under JSON mode the model read them as a
+  // continuation of the claim description rather than as keys it had to
+  // produce: it returned four well-formed claims and no keywords at all, and
+  // every one was then discarded below. See the filter for what that cost.
   const keywordFields = isForeign
-    ? `      "search_keywords": "<exactly 3 or 4 of the most distinctive words IN ${language.name.toUpperCase()}, most important first>",
-      "search_keywords_en": "<the same 3 or 4 distinctive terms translated into English - proper nouns transliterated>"`
-    : `      "search_keywords": "<exactly 3 or 4 of the most distinctive words - names, places or events - most important first, no quotes or operators>"`;
+    ? `- "search_keywords": one string of exactly 3 or 4 of the most distinctive words IN ${language.name.toUpperCase()}, most important first.
+- "search_keywords_en": one string of the same 3 or 4 distinctive terms in English, proper nouns transliterated.`
+    : '- "search_keywords": one string of exactly 3 or 4 of the most distinctive words — names, places or events — most important first, no quotes or operators.';
 
   const prompt = `You are a fact-checking assistant. Extract the most important CHECKABLE factual claims from this news article — concrete statements about events, numbers, or actions that other news outlets would also report if true. Skip opinions and vague statements.
 
@@ -45,14 +65,31 @@ Return at most ${maxClaims} claims. If the article contains no checkable claims,
   const claims = Array.isArray(result) ? result
     : Array.isArray(result.claims) ? result.claims
     : [];
+
+  // A claim with no keywords is a claim we have to build search terms for, not
+  // a claim that was never made.
+  //
+  // Measured on a live BBC report of five terrorism arrests: the model
+  // returned four correct, checkable claims and omitted search_keywords from
+  // all four. Requiring the keywords here discarded every one, the ledger saw
+  // zero checkable claims, and the verdict engine called a hard news story
+  // "NOT A FACTUAL CLAIM — argument or analysis, nothing here to verify".
+  // Dropping a field we can reconstruct must never be reported as the article
+  // asserting nothing; that is a failure wearing the costume of a finding.
   return claims
-    .filter(c => c && c.claim && c.search_keywords)
+    .filter(c => c && c.claim)
     .slice(0, maxClaims)
-    .map(c => ({
-      claim: String(c.claim),
-      keywords: String(c.search_keywords),
-      keywordsEn: c.search_keywords_en ? String(c.search_keywords_en) : null
-    }));
+    .map(c => {
+      const given = String(c.search_keywords || '').trim();
+      const keywords = given || deriveKeywords(c.claim);
+      return {
+        claim: String(c.claim),
+        keywords,
+        keywordsEn: c.search_keywords_en ? String(c.search_keywords_en) : null,
+        keywordsDerived: !given
+      };
+    })
+    .filter(c => c.keywords);
 };
 
 /**
@@ -353,5 +390,5 @@ module.exports = {
   extractClaims,
   // Exposed for the regression tests that cover what happens when the search
   // or the judgement cannot run. Not part of the pipeline's interface.
-  __test: { judgeClaim, gatherCoverage, summariseResults }
+  __test: { judgeClaim, gatherCoverage, summariseResults, deriveKeywords }
 };
