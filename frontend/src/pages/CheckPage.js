@@ -125,7 +125,8 @@ const CheckPage = () => {
         <div className="press-dateline">The Verification Desk</div>
         <h1 className="press-name">Check Anything</h1>
         <div className="press-tagline">
-          A link, a forwarded message, or a screenshot — we will tell you whether it holds up
+          An article, a video, a forwarded message or a screenshot — we will tell
+          you whether it holds up
         </div>
       </header>
 
@@ -173,7 +174,7 @@ const CheckPage = () => {
               type="url"
               value={url}
               onChange={(e) => { setUrl(e.target.value); reset(); }}
-              placeholder="https://…"
+              placeholder="Paste a news link, or a YouTube video — https://…"
             />
           )}
 
@@ -202,6 +203,18 @@ const CheckPage = () => {
         </form>
 
         <aside className="check-aside">
+          {/* What may be given, which was the least discoverable thing on the
+              page: video is accepted and always was, but the only mention of
+              it sat inside the link tab's hint, and the page opens on the text
+              tab. */}
+          <h2 className="check-aside__head">What you can give it</h2>
+          <ul className="check-inputs">
+            <li><strong>A news link</strong> — we read the article itself, not the preview.</li>
+            <li><strong>A YouTube video</strong> — we read the transcript, since the claim is in the speech.</li>
+            <li><strong>A forwarded message</strong> — paste it as it reached you.</li>
+            <li><strong>A screenshot</strong> — we read the text out of the image.</li>
+          </ul>
+
           <h2 className="check-aside__head">What you will get back</h2>
           <dl className="check-verdicts">
             <div className="check-verdict check-verdict--real">
