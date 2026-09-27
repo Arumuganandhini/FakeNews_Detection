@@ -10,6 +10,9 @@
 process.env.NIM_API_KEY = '';
 process.env.GEMINI_API_KEY = '';
 process.env.NEWS_API_KEY = '';
+// A local model needs no key, so the three lines above stopped being enough
+// once Ollama was configured.
+process.env.OLLAMA_HOST = '';
 
 const test = require('node:test');
 const assert = require('node:assert');

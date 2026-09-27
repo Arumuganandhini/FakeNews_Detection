@@ -40,6 +40,10 @@ const args = process.argv.slice(2);
 if (args.includes('--no-model')) {
   process.env.NIM_API_KEY = '';
   process.env.GEMINI_API_KEY = '';
+  // A local model needs no key, so blanking the keys stopped being enough the
+  // moment Ollama was configured: --no-model was still running the model, and
+  // the run it produced was not the deterministic one it reported itself as.
+  process.env.OLLAMA_HOST = '';
 }
 
 /**

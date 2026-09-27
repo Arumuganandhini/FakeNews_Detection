@@ -112,6 +112,7 @@ test('one claim failing does not discard the claims that were checked', async ()
 test('the summary does not report an outage as an absence of coverage', async () => {
   process.env.NIM_API_KEY = '';
   process.env.GEMINI_API_KEY = '';
+  process.env.OLLAMA_HOST = '';
   const previousNews = process.env.NEWS_API_KEY;
   process.env.NEWS_API_KEY = '';
   delete require.cache[require.resolve('../agents/trustAnalysisAgent')];

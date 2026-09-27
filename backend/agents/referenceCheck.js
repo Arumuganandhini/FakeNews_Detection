@@ -226,15 +226,35 @@ News article:
 Title: ${title}
 Text: ${String(content || '').slice(0, 900)}
 
-The encyclopedia will not mention most of what the article says. That is normal and is NOT a contradiction. Answer "contradicts": true ONLY if the entry states something that directly conflicts with a fact the article asserts about ${entity} — for example a different office holder, a different date, a different organisation.
+First decide whether the entry is even about the same ${entity} the article means. Names are shared: a local council officer, a cricketer and an actress can carry the same name, and an entry about one of them says nothing about another. If the entry describes a person or thing in a plainly different walk of life from the one the article describes, they are different subjects and there is no contradiction.
+
+The encyclopedia will not mention most of what the article says. That is normal and is NOT a contradiction. Answer "contradicts": true ONLY when the entry is about the SAME subject AND states something that directly conflicts with a fact the article asserts about ${entity} — for example a different office holder, a different date, a different organisation.
 
 Return a JSON object with these keys:
+- "same_subject": true when the entry is about the same ${entity} the article means, false when it is a different person or thing that happens to share the name.
 - "contradicts": true or false.
 - "article_states": what the article says about ${entity}, in one short sentence.
 - "reference_states": the conflicting sentence copied exactly from the encyclopedia entry, or an empty string when there is no conflict.`;
 
   try {
     const result = await callNimApiJson(prompt, { maxTokens: 400, requiredKeys: ['contradicts'], label: 'premise check' });
+
+    // A name is not an identity.
+    //
+    // The adversarial set contains a genuine article quoting a council
+    // transport secretary named Meera Krishnan. The lookup resolved that to the
+    // encyclopedia entry for Meera Krishnan the actress, and the judge duly
+    // reported a contradiction: the article calls her a transport secretary,
+    // the entry calls her an actress. Both statements are true about different
+    // people, and the system condemned a genuine article on the strength of a
+    // shared name. Refusing to accuse when the subjects differ is the whole
+    // point of the asymmetry this project rests on, so a contradiction is only
+    // admitted once the model has confirmed it is talking about one person.
+    if (result && result.same_subject === false) {
+      return { contradicts: false, differentSubject: true,
+        article_states: String(result.article_states || ''),
+        reference_states: '' };
+    }
     const referenceStates = String(result.reference_states || '').trim();
 
     // The model must ground a contradiction in the reference text. An assertion

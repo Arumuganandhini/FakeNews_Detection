@@ -98,3 +98,62 @@ test('a premise check that could not run is not reported as consistent', async (
     delete require.cache[require.resolve('../agents/referenceCheck')];
   }
 });
+
+// A shared name is not a shared identity.
+//
+// The adversarial set contains a genuine article quoting a council transport
+// secretary named Meera Krishnan. The lookup resolved that to the encyclopedia
+// entry for Meera Krishnan the actress, and the judge reported a
+// contradiction: the article calls her a transport secretary, the entry calls
+// her an actress. Both are true, about different people, and a genuine article
+// was condemned on the strength of a name. Refusing to accuse when the subjects
+// differ is the asymmetry this project rests on.
+test('a different person with the same name is not a contradiction', async () => {
+  const nimPath = require.resolve('../utils/nvidiaNimApi');
+  const wikiPath = require.resolve('../utils/wikipedia');
+  const realNim = require.cache[nimPath];
+  const realWiki = require.cache[wikiPath];
+  const agentPath = require.resolve('../agents/referenceCheck');
+
+  require.cache[wikiPath] = {
+    id: wikiPath, filename: wikiPath, loaded: true,
+    exports: {
+      fetchWikipediaContent: async () => ([{
+        title: 'Meera Krishnan',
+        url: 'https://en.wikipedia.org/wiki/Meera_Krishnan',
+        content: 'Meera Krishnan is an Indian actress who has appeared in Tamil-language films and television serials.'
+      }]),
+      ReferenceUnavailableError: class extends Error {}
+    }
+  };
+  require.cache[nimPath] = {
+    id: nimPath, filename: nimPath, loaded: true,
+    exports: {
+      callNimApiJson: async () => ({
+        same_subject: false,
+        contradicts: true,          // the judge still says "contradicts"...
+        article_states: 'Meera Krishnan is the council transport secretary.',
+        reference_states: 'Meera Krishnan is an Indian actress.'
+      }),
+      callNimApi: async () => '',
+      extractJson: () => ({})
+    }
+  };
+  delete require.cache[agentPath];
+
+  try {
+    const { checkPremises } = require(agentPath);
+    const result = await checkPremises(
+      'Council approves cycle lane budget',
+      'The transport secretary, Meera Krishnan, said construction would begin in January in Chennai.');
+
+    // ...and it must not reach the reader as one, because the subjects differ.
+    assert.equal(result.contradictions.length, 0,
+      'a name collision must not be reported as a contradicted premise');
+    assert.notEqual(result.status, 'contradicted');
+  } finally {
+    delete require.cache[agentPath];
+    if (realNim) require.cache[nimPath] = realNim; else delete require.cache[nimPath];
+    if (realWiki) require.cache[wikiPath] = realWiki; else delete require.cache[wikiPath];
+  }
+});
