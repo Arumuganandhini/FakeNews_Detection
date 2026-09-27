@@ -3,11 +3,19 @@
 // This is the test that answers "what is this project, once you take away the
 // borrowed model and the borrowed news feed?" Everything here runs on the
 // project's own code: the deterministic analysers, the ownership model, the
-// independence count, the verdict rules and the ceiling. If it passes with the
-// keys removed, the contribution is not the API.
+// independence count, the verdict rules and the ceiling. If it passes with
+// every model unreachable, the contribution is not the API.
+//
+// OLLAMA_HOST is blanked along with the keys. A local model needs no key, so
+// once one is configured "no keys" stopped meaning "no model" and this test
+// began exercising the local model instead of the fallback it exists to cover.
+// The scenario under test is that NOTHING answers, which is a real operating
+// condition — no network, no local runtime — and the one where the pattern
+// analysers have to carry the system on their own.
 process.env.NIM_API_KEY = '';
 process.env.GEMINI_API_KEY = '';
 process.env.NEWS_API_KEY = '';
+process.env.OLLAMA_HOST = '';
 
 const test = require('node:test');
 const assert = require('node:assert');
