@@ -33,6 +33,31 @@ function loadDb() {
   return db;
 }
 
+// A published rating set for everything the curated list does not cover.
+//
+// The curated list holds 90 outlets, and "a list we compiled ourselves" is the
+// first thing an examiner questions. Lin et al. (2023, PNAS Nexus) combine six
+// professional rating sets into one quality score for 11,520 news domains.
+// Across the 81 outlets both cover, the two agree at Pearson r = 0.85
+// (Spearman 0.77); the nine the published set lacks are all Indian outlets,
+// which is why the curated list is still consulted first. See
+// data/domainQuality.json for the citation and the fitted conversion.
+const QUALITY_PATH = path.join(__dirname, '../data/domainQuality.json');
+let quality = null;
+
+function loadQuality() {
+  if (!quality) {
+    try {
+      quality = JSON.parse(fs.readFileSync(QUALITY_PATH, 'utf8'));
+    } catch (_) {
+      quality = { ratings: {}, mapping: { intercept: 0, slope: 10 } };
+    }
+    // The handful of entries rated by path, found once rather than per lookup.
+    quality.pathKeys = Object.keys(quality.ratings).filter(k => k.includes('/'));
+  }
+  return quality;
+}
+
 // Platforms host anyone's account under any name. A name there tells us what
 // an account calls itself, not who runs it; only a listed channel address does.
 const PLATFORM_HOSTS = [
@@ -119,6 +144,32 @@ function outletForAddress({ host, path: urlPath }) {
     }
   }
   return best ? best.entry : null;
+}
+
+/**
+ * The published rating for this address: the page's own host first, then each
+ * parent domain up to the registrable one, so news.example.co.uk falls back to
+ * example.co.uk but never to co.uk. A few entries carry a path
+ * ("channel4.com/news") and are matched as a path prefix.
+ */
+function ratedDomain({ host, path: urlPath }) {
+  const { ratings, pathKeys } = loadQuality();
+  const withPath = `${host}${urlPath}`;
+  let best = null;
+  for (const key of pathKeys) {
+    if ((withPath === key || withPath.startsWith(`${key}/`)) && (!best || key.length > best.length)) best = key;
+  }
+  if (best) return { key: best, pc1: ratings[best] };
+
+  const labels = host.split('.');
+  // Keep at least two labels, or three under a second-level suffix like co.uk.
+  const secondLevel = /^(co|com|org|net|gov|ac|edu|or|ne|go)$/;
+  const floor = labels.length >= 3 && secondLevel.test(labels[labels.length - 2]) ? 3 : 2;
+  for (let i = 0; labels.length - i >= floor; i++) {
+    const candidate = labels.slice(i).join('.');
+    if (Object.prototype.hasOwnProperty.call(ratings, candidate)) return { key: candidate, pc1: ratings[candidate] };
+  }
+  return null;
 }
 
 /** The outlet a platform channel belongs to, when its address is listed. */
@@ -216,6 +267,26 @@ function getSourceReputation(sourceName, articleUrl, { trustedName = false } = {
     }
 
     const claimed = claimedOutlet(sourceName);
+
+    const rated = ratedDomain(address);
+    if (rated) {
+      const { mapping } = loadQuality();
+      const score = Math.round(Math.min(10, Math.max(0, mapping.intercept + mapping.slope * rated.pc1)) * 10) / 10;
+      return {
+        score,
+        bias: 'unknown',
+        type: 'rated domain',
+        matched: true,
+        matchedName: rated.key,
+        verifiedBy: 'domain',
+        ratingSource: 'Lin et al. (2023)',
+        notes: `Rated ${rated.pc1.toFixed(2)} of 1 for news quality in Lin et al. (2023), an aggregate of six professional rating sets, which is ${score}/10 on our scale.`,
+        // A known junk site can also be posing as a newsroom; it keeps both marks.
+        ...(claimed ? { impersonates: claimed.name } : {})
+      };
+    }
+
+
     if (claimed) {
       return unknown(
         `This page presents itself as ${claimed.name}, but it is not published on any web address ${claimed.name} uses. Passing a page off as a known newsroom is a common way of lending a fabricated story credibility.`,

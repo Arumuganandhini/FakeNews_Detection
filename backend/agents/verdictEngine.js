@@ -137,7 +137,7 @@ const looksHighImpact = (text) => HIGH_IMPACT_PATTERNS.some(pattern => pattern.t
 const buildEvidenceLedger = ({
   claims = [], sourceResult = {}, transparencyResult = {}, manipulationResult = {}, title = '',
   verificationStatus = 'unverified', premiseResult = null,
-  publishedAt = null, indexLagHours = INDEX_LAG_HOURS
+  publishedAt = null, indexLagHours = INDEX_LAG_HOURS, domainAge = null
 }) => {
   // How old the story is, when the page told us. An unknown date is left
   // unknown: guessing "now" would make every undated article look too recent
@@ -212,6 +212,9 @@ const buildEvidenceLedger = ({
     // The known outlet this page claims to be while publishing from an address
     // that outlet does not use. See agents/sourceReputationAgent.js.
     impersonates: sourceResult.impersonates || null,
+    // A domain registered weeks ago (utils/domainAge.js). Null when the
+    // registry was not asked or did not answer — not "old".
+    domainAge: domainAge || null,
     sourceIsSatire: String(sourceResult.type || '').toLowerCase() === 'satire',
     sourceIsConspiracy: String(sourceResult.type || '').toLowerCase() === 'conspiracy',
     transparencyScore: Number(transparencyResult.score) || 0,
@@ -394,6 +397,9 @@ const decideVerdict = (ledger) => {
   if (ledger.impersonates) risk.push(`the page presents itself as ${ledger.impersonates} but is not published on any address ${ledger.impersonates} uses`);
   else if (!ledger.sourceKnown) risk.push('the publisher has no reliability record');
   if (ledger.sourceIsConspiracy || ledger.sourceReliability <= 3) risk.push('the publisher has a poor factual-reporting record');
+  // Young only ever counts against: an old domain can be bought, a young one
+  // cannot have built a record. See utils/domainAge.js.
+  if (ledger.domainAge && ledger.domainAge.young) risk.push(`the site's domain was registered only ${ledger.domainAge.ageDays} days ago`);
   if (ledger.persuasionTechniqueCount >= 2) risk.push(`the article uses ${ledger.persuasionTechniqueCount} persuasion techniques on the reader`);
   if (ledger.transparencyScore > 0 && ledger.transparencyScore < 4) risk.push('its claims cannot be traced to any nameable source');
 

@@ -195,6 +195,50 @@ twelve analyses in the matrix used up a fresh allowance.
 
 ---
 
+## 2d. Publisher identity and ratings
+
+```
+npm test -- test/sourceIdentity.test.js
+```
+
+**Identity comes from the address.** Before the change, the lookup trusted the
+name a page gives itself, and all four copycats below were accepted as the real
+outlet. After it, none are.
+
+| Address | Before | After |
+|---|---|---|
+| `bbc-breaking-news.xyz`, page calls itself "BBC News" | BBC News, 9/10 | no record, **flagged as impersonating BBC News** |
+| `bbc-world.com` | BBC News, 9/10 | no record |
+| `bbc.news-today.com` | BBC News, 9/10 | no record |
+| `reuters-updates.info`, page calls itself "Reuters" | Reuters, 9.5/10 | no record, **flagged as impersonating Reuters** |
+| YouTube channel named "Associated Press", not AP's address | AP, 9.5/10 | no record |
+| "BBC News" typed beside a screenshot | BBC News, 9/10 | no record |
+
+A fabricated income-tax story on `bbc-breaking-news.xyz`, run live on
+2026-09-28: before, `no-independent-coverage-established-publisher` ("an
+exclusive that others have not yet matched") with a fabrication probability of
+about 2%; after, `no-independent-coverage` from the poor-record prior, **33%**,
+with the impersonation stated. The genuine BBC article in the demo set still
+returns REAL from the strong-record prior.
+
+**Ratings.** The curated list (90 outlets) is consulted first, then the
+published ratings of Lin et al. (2023, PNAS Nexus) for **11,520 domains**.
+
+| | value |
+|---|---|
+| Outlets rated in both | 81 of 90 |
+| Agreement, Pearson r | **0.848** |
+| Agreement, Spearman ρ | **0.765** |
+| Conversion, least squares over the overlap | reliability = 0.38 + 8.95 × pc1 |
+| Curated outlets missing from the published set | 9, all Indian (PTI, Zee News, Times Now, OpIndia, Livemint, Moneycontrol, Dainik Bhaskar, Dinamalar, Daily Thanthi) |
+
+**Domain age.** Read from the public registration record (RDAP) for sites with
+no rating. A domain under 90 days old is one warning sign among several; an old
+domain earns nothing, because one can be bought. `bbc.com`: registered
+1989-07-15.
+
+---
+
 ## 3. Deterministic components
 
 No network and no model. Same command as above.
@@ -370,7 +414,7 @@ CI=true npx react-scripts test --watchAll=false   # frontend
 
 | Suite | Result |
 |---|---|
-| Backend | 151 / 151 |
+| Backend | 173 / 173 |
 | Frontend | 14 / 14 |
 
 `test/pipeline.nomodel.test.js` runs the whole pipeline with every model and

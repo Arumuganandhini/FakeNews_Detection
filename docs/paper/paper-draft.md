@@ -258,10 +258,21 @@ these weights by hand, and replacing that assignment with measurement is one of
 the contributions of this work.
 
 
-**[1] Source reputation.** A curated database of 90 outlets, each
-with a factual-reporting rating, editorial lean, and outlet type, matched by name
-and domain alias. Matching is whole-word and prefix-based; substring matching was
-found to produce false positives (Section 5.2).
+**[1] Source reputation.** Identity is established from the page's web address,
+never from the name the page gives itself, since a site chooses its own name: a
+record is granted only on a domain the outlet publishes from, or a platform
+channel listed as its own. Ratings come first from a curated database of 90
+outlets carrying factual-reporting rating, editorial lean and outlet type, and
+otherwise from the published domain-quality ratings of Lin et al. [16], which
+aggregate six professional rating sets over 11,520 news domains. The two agree
+closely where they overlap (81 outlets, Pearson r = 0.85, Spearman ρ = 0.77); a
+least-squares fit over that overlap converts the published 0–1 score to our 0–10
+scale. The nine outlets the published set lacks are all Indian, which is why the
+curated list is consulted first. A page that claims a distinctive outlet's name
+from an address that outlet does not use receives no record and is treated as
+impersonation, which counts against it; so does a domain registered under 90
+days ago, read from the public registration record (RDAP). Both are one-sided:
+an old domain can be bought, so age earns nothing in a site's favour.
 
 **[2] Headline quality.** Structured scoring of clickbait signals —
 curiosity gap, sensational verbs, unsubstantiated superlatives, listicle
@@ -859,11 +870,12 @@ thirty claims by hand for coverage rate and verdict precision.
 **Reading trust history.** Per-article scores are already stored; presenting a
 reader's own reading reliability over time requires only the visualisation.
 
-**Self-extending source ratings.** The 90-outlet database is hand-curated, and
-unrecognised outlets are the most frequent gap in deployment. Because every
-analysis already yields a per-outlet score, ratings for unlisted outlets can be
-accumulated from articles already assessed, and validated against the
-hand-curated entries.
+**Wider source coverage.** The published ratings [16] cover 11,520 domains but
+few regional-language Indian outlets, which the curated list fills only for the
+largest. Because every analysis already yields a per-outlet score, ratings for
+unlisted outlets can be accumulated from articles already assessed and validated
+against both sets. Verified platform channels are listed for one outlet so far
+and would extend in the same way.
 
 ---
 
@@ -929,6 +941,11 @@ Learning in a Widely Used Fake News Corpus," arXiv:2609.25006, 2026.
 
 [15] H. Jeffreys, *Theory of Probability*, 3rd ed. Oxford, U.K.: Clarendon
 Press, 1961.
+
+[16] H. Lin, J. Lasser, S. Lewandowsky, R. Cole, A. Gully, D. G. Rand, and
+G. Pennycook, "High Level of Correspondence Across Different News Domain Quality
+Rating Sets," *PNAS Nexus*, vol. 2, no. 9, p. pgad286, 2023,
+doi: 10.1093/pnasnexus/pgad286.
 
 ---
 

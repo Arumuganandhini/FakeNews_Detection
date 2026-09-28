@@ -113,3 +113,51 @@ test('an impersonating page starts from the poor-record prior', () => {
   assert.equal(priorFor({ sourceResult: spoof }).band, 'poorRecord');
   assert.equal(priorFor({ sourceResult: real }).band, 'strongRecord');
 });
+
+// ------------------------------------------------- the published rating set
+
+test('an outlet outside the curated list is rated from Lin et al. (2023)', () => {
+  const r = outlet('Roll Call', 'https://www.rollcall.com/2026/x');
+  assert.equal(r.matched, true);
+  assert.equal(r.ratingSource, 'Lin et al. (2023)');
+  assert.ok(r.score >= 8.5, `rollcall.com is rated 0.98 of 1; got ${r.score}/10`);
+});
+
+test('a low-quality domain in the published set is rated low', () => {
+  assert.ok(outlet('x', 'https://nvic.org/a').score < 3);
+});
+
+test('the curated list is consulted first', () => {
+  const r = outlet('Reuters', 'https://www.reuters.com/world/x');
+  assert.equal(r.ratingSource, undefined);
+  assert.equal(r.type, 'news agency', 'curated types (agency, satire, state) are kept');
+});
+
+test('a rated parent domain covers its subdomains, but never a bare suffix', () => {
+  assert.equal(outlet('x', 'https://news.rollcall.com/x').matchedName, 'rollcall.com');
+  assert.equal(outlet('x', 'https://unrated-example-site.co.uk/x').matched, false);
+});
+
+// ------------------------------------------------------------- domain age
+
+test('the registrable domain is found under two-level suffixes', () => {
+  const { registrable } = require('../utils/domainAge');
+  assert.equal(registrable('news.bbc.co.uk'), 'bbc.co.uk');
+  assert.equal(registrable('www.bbc-breaking-news.xyz'), 'bbc-breaking-news.xyz');
+  assert.equal(registrable('edition.cnn.com'), 'cnn.com');
+});
+
+test('a very young domain is a warning sign, and only that', () => {
+  const young = { domain: 'bbc-breaking-news.xyz', registered: '2026-09-20', ageDays: 8, young: true };
+  const risky = buildEvidenceLedger({
+    claims: uncorroborated, verificationStatus: 'checked', sourceResult: outlet('x', 'https://bbc-breaking-news.xyz/1'),
+    transparencyResult: { score: 7 }, manipulationResult: { techniques: [] }, title: 'India to abolish all income tax',
+    domainAge: young
+  });
+  assert.ok(decideVerdict(risky).grounds.some(g => /registered only 8 days ago/.test(g)));
+
+  // An unanswered registry is not an old domain: nothing is said either way.
+  const unknownAge = ledgerFor(outlet('x', 'https://bbc-breaking-news.xyz/1'));
+  assert.equal(unknownAge.domainAge, null);
+  assert.ok(!decideVerdict(unknownAge).grounds.some(g => /registered/.test(g)));
+});

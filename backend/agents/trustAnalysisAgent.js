@@ -9,6 +9,7 @@
 // only lower trust; evidence is what raises it. See agents/verdictEngine.js for
 // why the earlier weighted sum produced high scores for fabricated articles.
 const { getSourceReputation } = require('./sourceReputationAgent');
+const { domainAge } = require('../utils/domainAge');
 const { analyzeClickbait } = require('./clickbaitAgent');
 const { analyzeBias } = require('./biasAgent');
 const { verifyClaims, extractClaims } = require('./claimVerificationAgent');
@@ -279,6 +280,13 @@ const analyzeTrust = async ({ title, content, source, url, textCoverage, onProgr
     return outlet;
   });
 
+  // How old the site's domain is, asked only of sites we hold no record for —
+  // a rated outlet's age tells us nothing its record does not. Started now so
+  // the registry lookup overlaps the checks below instead of adding to them.
+  const domainAgePromise = url && !provenance && !sourceResult.matched
+    ? domainAge(url).catch(() => null)
+    : Promise.resolve(null);
+
   // Claim extraction feeds only verification; the four content checks never use
   // it. Starting it alongside them keeps it off the critical path.
   //
@@ -356,7 +364,8 @@ const analyzeTrust = async ({ title, content, source, url, textCoverage, onProgr
     title,
     // So the ledger can tell "no outlet reports this" apart from "the index we
     // search does not carry anything this recent". See verdictEngine R3a.
-    publishedAt
+    publishedAt,
+    domainAge: await domainAgePromise
   });
 
   const assessment = assessProbability({
