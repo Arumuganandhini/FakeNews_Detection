@@ -67,14 +67,19 @@ const assertPublicUrl = async (rawUrl) => {
   return parsed;
 };
 
+// Hex references matter: the BBC writes apostrophes as &#x27;, and without
+// them every "Bangkok's" reached the reader, and every check, as
+// "Bangkok&#x27;s". &amp; goes last so that "&amp;#x27;" decodes once, to
+// the literal text "&#x27;", rather than twice.
 const decodeEntities = (str) => String(str || '')
   .replace(/&nbsp;/gi, ' ')
-  .replace(/&amp;/gi, '&')
   .replace(/&quot;/gi, '"')
   .replace(/&#39;|&apos;/gi, "'")
   .replace(/&lt;/gi, '<')
   .replace(/&gt;/gi, '>')
-  .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+  .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+  .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+  .replace(/&amp;/gi, '&');
 
 const stripTags = (html) => decodeEntities(html.replace(/<[^>]*>/g, ' '))
   .replace(/\s+/g, ' ')
@@ -228,4 +233,4 @@ const extractArticle = async (rawUrl) => {
 // assertPublicUrl is exported so anything else that fetches a third-party page
 // (the fact-check reader, for one) reuses this guard rather than growing its
 // own copy that could drift out of step.
-module.exports = { extractArticle, assertPublicUrl, MAX_BYTES, FETCH_TIMEOUT };
+module.exports = { extractArticle, assertPublicUrl, MAX_BYTES, FETCH_TIMEOUT, __test: { decodeEntities } };

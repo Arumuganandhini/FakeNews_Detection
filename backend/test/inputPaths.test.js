@@ -191,3 +191,16 @@ test('corroboration that was found still counts, however recent the story', () =
   assert.strictEqual(ledger.verificationRan, true);
   assert.strictEqual(decideVerdict(ledger).call, 'REAL');
 });
+
+// ---------------------------------------------------------------------------
+// 5. An apostrophe is an apostrophe.
+
+// The BBC encodes apostrophes as hex references. The decoder handled &#39; but
+// not &#x27;, so "Bangkok's" reached the page, the claim extractor and the
+// style checks as "Bangkok&#x27;s".
+test('hex character references are decoded in extracted text', () => {
+  const { __test } = require('../utils/articleExtractor');
+  assert.strictEqual(__test.decodeEntities('Bangkok&#x27;s governor'), "Bangkok's governor");
+  assert.strictEqual(__test.decodeEntities('it&#39;s &amp; that'), "it's & that");
+  assert.strictEqual(__test.decodeEntities('&amp;#x27;'), '&#x27;', 'decoded once, not twice');
+});
