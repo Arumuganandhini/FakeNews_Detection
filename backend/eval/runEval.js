@@ -175,7 +175,9 @@ async function evalOne(item, cfg, hideSource) {
   };
 
   const scores = {};
-  if (cfg.source) scores.sourceReputation = getSourceReputation(source, null).score;
+  // The dataset's source label is curated, not taken from the page, so it may
+  // be matched by name; the live pipeline only ever matches on the address.
+  if (cfg.source) scores.sourceReputation = getSourceReputation(source, null, { trustedName: true }).score;
 
   // The content factors are independent of one another and the deployed
   // pipeline runs them concurrently, so the evaluation does too. Results are

@@ -92,6 +92,19 @@ const priorFor = ({ sourceResult = {}, provenance = null }) => {
     };
   }
 
+  // A page passing itself off as a known newsroom starts where a publisher
+  // with a poor record starts. No new number is introduced for it: the band
+  // and its declared value already exist, and impersonation is a stronger
+  // reason for that starting point than a poor rating is.
+  if (sourceResult.impersonates) {
+    return {
+      probability: priors.poorRecord.value,
+      band: 'poorRecord',
+      reason: `The page presents itself as ${sourceResult.impersonates} but is not published on any address ${sourceResult.impersonates} uses, so it starts where a publisher with a poor record starts.`,
+      basis: 'declared'
+    };
+  }
+
   const reliability = Number(sourceResult.score) || 0;
   const matched = Boolean(sourceResult.matched);
 

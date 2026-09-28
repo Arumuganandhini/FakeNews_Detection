@@ -22,7 +22,7 @@
 // the caption or upload a screenshot, and the screenshot path is implemented.
 const axios = require('axios');
 const { assertPublicUrl, FETCH_TIMEOUT } = require('./articleExtractor');
-const { getSourceReputation } = require('../agents/sourceReputationAgent');
+const { getSourceReputation, claimedOutlet } = require('../agents/sourceReputationAgent');
 
 const PLATFORMS = [
   { id: 'youtube', name: 'YouTube', hosts: ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'] },
@@ -238,6 +238,18 @@ const buildProvenance = ({ platform, accountName, accountUrl, postUrl }) => {
     };
   }
 
+  // A newsroom's name on a channel or beside a screenshot is only a claim. It
+  // earns the outlet's record through a listed channel address, never through
+  // the name — so "BBC News" typed next to a screenshot, or a YouTube channel
+  // that merely calls itself "Associated Press", is told so plainly.
+  const claimed = accountName ? claimedOutlet(accountName) : null;
+  let note = 'We could not establish who posted this.';
+  if (claimed) {
+    note = `Given as ${claimed.name}, but that name could not be confirmed from where this came from, so ${claimed.name}'s record is not applied. Anyone can put a newsroom's name on an account or a screenshot.`;
+  } else if (accountName) {
+    note = `Posted by ${accountName}, an account with no editorial record we can check. An account is not a publisher: there is no correction policy, no masthead and no accountability we can point you to.`;
+  }
+
   return {
     platform: platform?.name || 'the web',
     account: accountName || null,
@@ -245,9 +257,7 @@ const buildProvenance = ({ platform, accountName, accountUrl, postUrl }) => {
     knownOutletChannel: false,
     outletName: null,
     reliability: SOCIAL_ACCOUNT_BASELINE,
-    note: accountName
-      ? `Posted by ${accountName}, an account with no editorial record we can check. An account is not a publisher: there is no correction policy, no masthead and no accountability we can point you to.`
-      : 'We could not establish who posted this.'
+    note
   };
 };
 

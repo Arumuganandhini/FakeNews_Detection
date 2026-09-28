@@ -209,6 +209,9 @@ const buildEvidenceLedger = ({
     // from "we found nothing and the article looks engineered".
     sourceKnown: Boolean(sourceResult.matched),
     sourceReliability: Number(sourceResult.score) || 0,
+    // The known outlet this page claims to be while publishing from an address
+    // that outlet does not use. See agents/sourceReputationAgent.js.
+    impersonates: sourceResult.impersonates || null,
     sourceIsSatire: String(sourceResult.type || '').toLowerCase() === 'satire',
     sourceIsConspiracy: String(sourceResult.type || '').toLowerCase() === 'conspiracy',
     transparencyScore: Number(transparencyResult.score) || 0,
@@ -347,6 +350,13 @@ const decideVerdict = (ledger) => {
     ]);
   }
 
+  // A copy of a true story on an impersonating site is still a true story, so
+  // corroboration below stands — but the reader is told this page is not the
+  // outlet it claims to be, since that is what they will want to share.
+  if (ledger.impersonates && ledger.independentSupport >= 1) {
+    grounds.push(`This page presents itself as ${ledger.impersonates} but is not published on any address ${ledger.impersonates} uses. The events are confirmed elsewhere; this copy of them is not from ${ledger.impersonates}.`);
+  }
+
   // R5 — Corroborated by two or more independent sources.
   if (ledger.independentSupport >= 2) {
     grounds.push(`${ledger.independentSupport} independent sources report the same facts.`);
@@ -378,7 +388,11 @@ const decideVerdict = (ledger) => {
   // with no record and written to persuade, is not a neutral situation.
   const risk = [];
   if (ledger.highImpact) risk.push('the claim is consequential enough that other outlets would be expected to report it');
-  if (!ledger.sourceKnown) risk.push('the publisher has no reliability record');
+  // Impersonation replaces "no record" rather than adding to it: the page has
+  // no record because it is not who it claims to be, and counting both would
+  // count one fact twice.
+  if (ledger.impersonates) risk.push(`the page presents itself as ${ledger.impersonates} but is not published on any address ${ledger.impersonates} uses`);
+  else if (!ledger.sourceKnown) risk.push('the publisher has no reliability record');
   if (ledger.sourceIsConspiracy || ledger.sourceReliability <= 3) risk.push('the publisher has a poor factual-reporting record');
   if (ledger.persuasionTechniqueCount >= 2) risk.push(`the article uses ${ledger.persuasionTechniqueCount} persuasion techniques on the reader`);
   if (ledger.transparencyScore > 0 && ledger.transparencyScore < 4) risk.push('its claims cannot be traced to any nameable source');

@@ -29,11 +29,34 @@ test('an anonymous account does not inherit a publisher\'s neutral rating', () =
   assert.match(provenance.note, /no editorial record/);
 });
 
+// This used to assert that a channel merely NAMED "BBC News" inherited the
+// BBC's record. Anyone can name a channel that, so a name now earns nothing:
+// the record comes only through a channel address listed as the outlet's own.
 test('a known outlet\'s own channel inherits that outlet\'s record', () => {
-  const provenance = buildProvenance({ platform: { name: 'YouTube' }, accountName: 'BBC News' });
+  const provenance = buildProvenance({
+    platform: { name: 'YouTube' },
+    accountName: 'Associated Press',
+    accountUrl: 'https://www.youtube.com/@AssociatedPress'
+  });
   assert.strictEqual(provenance.knownOutletChannel, true);
-  assert.strictEqual(provenance.outletName, 'BBC News');
+  assert.strictEqual(provenance.outletName, 'Associated Press');
   assert.ok(provenance.reliability >= 8);
+});
+
+test('a channel that only uses a newsroom\'s name inherits nothing', () => {
+  const provenance = buildProvenance({
+    platform: { name: 'YouTube' },
+    accountName: 'BBC News',
+    accountUrl: 'https://www.youtube.com/@bbc-news-official-live'
+  });
+  assert.strictEqual(provenance.knownOutletChannel, false);
+  assert.match(provenance.note, /could not be confirmed/);
+});
+
+test('a newsroom name typed beside a screenshot inherits nothing', () => {
+  const provenance = buildProvenance({ platform: null, accountName: 'BBC News' });
+  assert.strictEqual(provenance.knownOutletChannel, false);
+  assert.ok(provenance.reliability < 8);
 });
 
 test('the caption track chosen is the one in the spoken language', () => {
