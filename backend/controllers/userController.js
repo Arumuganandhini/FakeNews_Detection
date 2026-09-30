@@ -1,4 +1,3 @@
-const User = require('../models/User');
 const UserInterest = require('../models/UserInterest');
 
 // Get user profile
@@ -32,10 +31,14 @@ exports.getProfile = async (req, res) => {
 // Update user profile
 exports.updateProfile = async (req, res) => {
   try {
-    const { name } = req.body;
+    // An empty or missing name used to be saved as-is, which erased it and left
+    // the dashboard greeting nobody.
+    const name = String(req.body.name || '').trim();
+    if (!name || name.length > 60) {
+      return res.status(400).json({ error: 'Please enter a name between 1 and 60 characters.' });
+    }
     const user = req.user;
 
-    // Update the user's name
     user.name = name;
     await user.save();
 

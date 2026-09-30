@@ -10,6 +10,7 @@ const authRoutes = require('./routes/authRoutes'); // New
 const trackingRoutes = require('./routes/trackingRoutes');
 const articleHistoryRoutes = require('./routes/articleHistory');
 const userRoutes = require('./routes/userRoutes');
+const apiAccess = require('./middleware/apiAccess');
 
 // DB Connection
 const connectDB = require('./utils/db'); // New
@@ -39,11 +40,10 @@ const allowedOrigins = [
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'));
-    }
+    // An origin not on the list is declined, not failed: answering with an
+    // error turned every such preflight into a 500 and a stack trace in the
+    // log. Without the allow header the browser refuses the call anyway.
+    return callback(null, allowedOrigins.indexOf(origin) !== -1);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -64,7 +64,10 @@ connectDB().then(() => {
 
 // Routes
 app.use('/api/news', newsRoutes);
-app.use('/api/ai', aiRoutes);
+// The analysis endpoints spend the day's news quota and model calls, so they
+// need a signed-in reader (or the evaluation scripts' key). See
+// middleware/apiAccess.js.
+app.use('/api/ai', apiAccess, aiRoutes);
 app.use('/api/auth', authRoutes); // New
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/article-history', articleHistoryRoutes);

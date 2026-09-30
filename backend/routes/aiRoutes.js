@@ -16,7 +16,6 @@ const { assessCheckability } = require('../agents/checkability');
 const { resolveArticleText, limitText, TEXT_BUDGET, fingerprintText } = require('../utils/articleText');
 const TrustReportCache = require('../models/TrustReportCache');
 const SummaryCache = require('../models/SummaryCache');
-const auth = require('../middleware/auth');
 
 /**
  * Is this report a result, or a record of our own failure?
@@ -36,6 +35,11 @@ const isCompleteReport = (report) => {
   if (!report) return false;
   // The corroboration check could not be carried out at all.
   if (report.decision?.rule === 'verification-unavailable') return false;
+  // Too new for the news index to have seen. That is true today and false
+  // tomorrow, so storing it for fourteen days would go on telling readers a
+  // week-old story is "too recent to check" — the same failure as caching an
+  // outage, with a later expiry date.
+  if (report.decision?.rule === 'too-recent-to-corroborate') return false;
   // One or more content checks fell back to word patterns.
   if (report.degradedFactors?.length > 0) return false;
   return true;
@@ -68,7 +72,24 @@ const cacheTrustReport = async ({ url, title, source, report, sourcePrint }) => 
 const isUsableCachedReport = (cached, sourcePrint) =>
   Boolean(cached)
   && isCurrent(cached.report)
-  && (!cached.sourcePrint || cached.sourcePrint === sourcePrint);
+  && (!sourcePrint || !cached.sourcePrint || cached.sourcePrint === sourcePrint);
+
+/**
+ * Fingerprint the text a caller sent, when it sent any.
+ *
+ * The fingerprint exists to notice a publisher rewriting a story under the
+ * same URL. It only works when the caller supplies the article's text. A page
+ * that has only the headline — reopening an article from the reading history,
+ * which stores no body — used to fingerprint the headline, miss the cache, and
+ * pay for a whole new analysis of a story already analysed, sometimes reaching
+ * a different verdict from the one the dashboard had counted. With no body to
+ * compare, there is nothing to say the story changed, so the URL decides.
+ */
+const printOf = (content, title) => {
+  const body = sanitizeContent(content);
+  if (!body || body.length < 40 || body.trim() === String(title || '').trim()) return null;
+  return fingerprintText(body);
+};
 
 // When a reader double-clicks, opens the same story in two tabs, or two feed
 // cards request the same report together, run one analysis and share its
@@ -98,10 +119,10 @@ const summariseWithCache = async (kind, { url, title, text }, generate) => {
   // alone the reader was shown a summary of the story that used to live there.
   // Seen in the app: a page headlined "Nasdaq rose to a new all-time intraday
   // high" carrying a summary, written nine days earlier, of a sell-off.
-  const sourcePrint = fingerprintText(clean);
+  const sourcePrint = printOf(clean, title);
   if (url) {
     const hit = await SummaryCache.findOne({ articleUrl: url, kind }).lean();
-    if (hit && (!hit.sourcePrint || hit.sourcePrint === sourcePrint)) {
+    if (hit && (!sourcePrint || !hit.sourcePrint || hit.sourcePrint === sourcePrint)) {
       return {
         summary: hit.summary,
         cached: true,
@@ -186,7 +207,7 @@ router.post('/trust-analysis', async (req, res) => {
   }
   // What the caller is asking about, so a cached verdict written about a
   // different version of this page is not reused.
-  const sourcePrint = fingerprintText(sanitizeContent(content) || title);
+  const sourcePrint = printOf(content, title);
   try {
     if (url) {
       const cached = await TrustReportCache.findOne({ articleUrl: url }).lean();
@@ -367,11 +388,11 @@ router.post('/analyze-content', async (req, res) => {
 // body has to be POSTed and the browser's EventSource is GET-only. The client
 // reads it with fetch() and a stream reader.
 router.post('/trust-analysis/stream', async (req, res) => {
-  const { title, content, source, url } = req.body;
+  const { title, content, source, url, publishedAt } = req.body;
   if (!title) {
     return res.status(400).json({ error: 'Article title is required.' });
   }
-  const sourcePrint = fingerprintText(sanitizeContent(content) || title);
+  const sourcePrint = printOf(content, title);
 
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -407,6 +428,10 @@ router.post('/trust-analysis/stream', async (req, res) => {
       content: limitText(resolved.text || content, TEXT_BUDGET.factors),
       source,
       url,
+      // The article page is how most stories are opened, and feed headlines
+      // are hours old while the news index runs about a day behind. Without the
+      // date, every fresh feed story was told no other outlet reported it.
+      publishedAt: publishedAt || null,
       textCoverage: resolved.source,
       onProgress: (step) => emit({ type: 'progress', ...step })
     });
@@ -527,7 +552,13 @@ router.post('/compare-coverage', async (req, res) => {
     const report = await compareCoverage({ title, query, source, url });
     res.json(report);
   } catch (err) {
-    console.error('Coverage comparison failed:', err);
+    console.error('Coverage comparison failed:', err.message);
+    // A search that could not run — most often the day's news quota — is a
+    // condition the reader can understand and wait out, so it is said plainly
+    // rather than as an unexplained failure.
+    if (err.searchUnavailable || err.code === 'NEWS_QUOTA_EXHAUSTED') {
+      return res.status(err.httpStatus || 503).json({ error: err.message });
+    }
     res.status(500).json({ error: 'Failed to compare coverage.' });
   }
 });
@@ -547,5 +578,8 @@ router.post('/detailed-summary', async (req, res) => {
   }
 });
 
+
+// Exposed for tests only: the caching and fingerprint policy are pure functions.
+router.__test = { isCompleteReport, isUsableCachedReport, printOf };
 
 module.exports = router;

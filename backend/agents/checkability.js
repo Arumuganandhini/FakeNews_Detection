@@ -91,7 +91,13 @@ const assessCheckability = (text, title = '') => {
   // content that asserts nothing, which is what this gate exists to prevent.
   const head = String(title || '').trim();
   const body = String(text || '').trim();
-  const combined = head
+  // Pasted text and screenshots have no headline of their own: the ingester
+  // uses the first line of the body, stripped of its closing "?" or "!". Adding
+  // it again in front turned "Is the government planning…?" into a statement
+  // followed by a question, and the question check below stopped recognising
+  // it. A headline the body already opens with adds nothing, so it is left out.
+  const repeatsBody = head && body.toLowerCase().startsWith(head.toLowerCase());
+  const combined = head && !repeatsBody
     ? `${/[.!?]$/.test(head) ? head : `${head}.`} ${body}`.trim()
     : body;
   const words = combined.split(/\s+/).filter(Boolean);

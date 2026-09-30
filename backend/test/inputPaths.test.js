@@ -204,3 +204,15 @@ test('hex character references are decoded in extracted text', () => {
   assert.strictEqual(__test.decodeEntities('it&#39;s &amp; that'), "it's & that");
   assert.strictEqual(__test.decodeEntities('&amp;#x27;'), '&#x27;', 'decoded once, not twice');
 });
+
+// Pasted text has no headline of its own; the ingester uses its first line
+// without the closing "?". Prepending that again turned a question into a
+// statement followed by a question, and it was refused as "too vague" rather
+// than as a question — the right refusal for the wrong reason.
+test('a pasted question is refused as a question', async () => {
+  const { ingestSocialContent } = require('../utils/socialIngest');
+  const ingested = await ingestSocialContent({ text: 'Is the government planning to change the tax rules next year?' });
+  const verdict = assessCheckability(ingested.content, ingested.title);
+  assert.strictEqual(verdict.checkable, false);
+  assert.strictEqual(verdict.kind, 'question');
+});

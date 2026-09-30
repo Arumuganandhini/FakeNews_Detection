@@ -70,7 +70,14 @@ const apiKey = process.env.NEWS_API_KEY;
     throw describeNewsApiError(err);
   }
 
-  return response.data.articles.map(article => ({
+  // The service keeps withdrawn stories in its results as placeholders titled
+  // "[Removed]" pointing at removed.com. Shown, they are blank cards that open
+  // an analysis of nothing.
+  const usable = (response.data.articles || []).filter(article =>
+    article && article.title && article.url
+    && article.title !== '[Removed]' && !/removed\.com/i.test(article.url));
+
+  return usable.map(article => ({
     title: article.title,
     description: article.description,
     content: article.content,
@@ -144,7 +151,14 @@ const searchNewsCoverage = async (query, excludeSourceName = '', pageSize = 10, 
     // means the search did not happen. Returning [] here would tell the caller
     // that no outlet covers the story, which is a finding we did not make.
     // The caller has to be able to tell the difference.
-    throw new SearchUnavailableError(message);
+    //
+    // The reader-facing wording comes from describeNewsApiError, so a used-up
+    // quota reads the same on the Compare page as it does on the feed.
+    const described = describeNewsApiError(error);
+    const unavailable = new SearchUnavailableError(described.message || message);
+    unavailable.code = described.code;
+    unavailable.httpStatus = described.httpStatus;
+    throw unavailable;
   }
 };
 

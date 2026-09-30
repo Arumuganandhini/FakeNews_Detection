@@ -1,44 +1,41 @@
-const axios = require('axios');
 const UserInterest = require('../models/UserInterest');
+const { fetchTopNews } = require('../utils/newsFetcher');
 
-// Get personalized news based on user interests
+// Get personalized news based on user interests.
+//
+// This used to call the news service itself, with its own query: US headlines
+// only, where the main feed asks for English from anywhere, and none of the
+// shared error handling, so a used-up daily quota reached the reader as an
+// unexplained server error while the main feed explained it. It now asks the
+// same fetcher the feed uses, for the reader's strongest interest.
 exports.getPersonalizedNews = async (req, res) => {
   try {
     const userId = req.user._id;
-    
-    // Get user interests
+
     const userInterests = await UserInterest.find({ userId })
       .sort({ interestScore: -1 })
-      .limit(3); // Get top 3 interests
-    
-    // If no interests, return general news
+      .limit(3);
+
     if (!userInterests || userInterests.length === 0) {
-      return res.status(200).json({ 
-        articles: [], 
-        message: 'No personalized interests found. Showing general news.' 
+      return res.status(200).json({
+        articles: [],
+        message: 'No personalized interests found. Showing general news.'
       });
     }
-    
-    // Get top interest category
+
     const topInterest = userInterests[0].category;
-    
-    // Fetch news from the top interest category
-    const apiKey = process.env.NEWS_API_KEY;
-    const url = `https://newsapi.org/v2/top-headlines?country=us&category=${topInterest}&apiKey=${apiKey}`;
-    
-    const response = await axios.get(url);
-    
-    if (response.data.status === 'ok' && response.data.articles.length > 0) {
-      return res.status(200).json({ 
-        articles: response.data.articles,
+    const articles = await fetchTopNews(topInterest);
+
+    if (articles.length > 0) {
+      return res.status(200).json({
+        articles,
         message: `Showing personalized news from ${topInterest} category based on your interests.`
       });
-    } else {
-      return res.status(200).json({ 
-        articles: [], 
-        message: 'No articles found for your interests. Showing general news.' 
-      });
     }
+    return res.status(200).json({
+      articles: [],
+      message: 'No articles found for your interests. Showing general news.'
+    });
   } catch (error) {
     console.error('Error fetching personalized news:', error.message);
     // Pass through the explained reason (quota reached, key invalid) rather
@@ -48,4 +45,4 @@ exports.getPersonalizedNews = async (req, res) => {
       code: error.code || 'NEWS_ERROR'
     });
   }
-}; 
+};

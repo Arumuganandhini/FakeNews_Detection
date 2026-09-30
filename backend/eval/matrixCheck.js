@@ -140,7 +140,13 @@ const post = (route, body, timeoutMs = 300000) => new Promise((resolve, reject) 
     port: url.port || 80,
     path: url.pathname,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload),
+      // The analysis endpoints need a login; this script uses the server's
+      // own key instead (middleware/apiAccess.js).
+      ...(process.env.INTERNAL_API_KEY ? { 'x-internal-key': process.env.INTERNAL_API_KEY } : {})
+    },
     timeout: timeoutMs
   }, res => {
     let buf = '';

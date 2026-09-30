@@ -580,7 +580,13 @@ const analyzeTrust = async ({ title, content, source, url, textCoverage, onProgr
           matched: sourceResult.matched,
           matchedName: sourceResult.matchedName,
           bias: sourceResult.bias,
-          type: sourceResult.type
+          type: sourceResult.type,
+          // What the page says about an unrecognised source depends on why it
+          // is unrecognised: an impersonator, an unverified account and a small
+          // unrated paper are three different things to tell a reader.
+          notes: sourceResult.notes || null,
+          impersonates: sourceResult.impersonates || null,
+          ratingSource: sourceResult.ratingSource || null
         },
         explanation: sourceResult.matched
           ? `${sourceResult.matchedName} (${sourceResult.type}) — ${sourceResult.notes}`

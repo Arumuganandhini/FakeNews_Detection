@@ -414,7 +414,7 @@ CI=true npx react-scripts test --watchAll=false   # frontend
 
 | Suite | Result |
 |---|---|
-| Backend | 173 / 173 |
+| Backend | 182 / 182 |
 | Frontend | 14 / 14 |
 
 `test/pipeline.nomodel.test.js` runs the whole pipeline with every model and
