@@ -136,6 +136,12 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
+.newspaper-dashboard .newspaper-name-error {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+  color: var(--trust-low);
+  text-align: center;
+}
 .newspaper-dashboard .newspaper-name-actions { display: flex; gap: 0.4rem; justify-content: center; }
 .newspaper-dashboard .newspaper-name-btn {
   padding: 0.28rem 0.7rem;

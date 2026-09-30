@@ -110,8 +110,10 @@ const NewsCard = ({ article, trustBadge }) => {
 
   // Format date to look like newspaper date format (added from friend's code)
   const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    if (!dateString || Number.isNaN(date.getTime())) return '';
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+    return date.toLocaleDateString(undefined, options);
   };
 
   return (

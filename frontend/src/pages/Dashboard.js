@@ -12,6 +12,7 @@ const Dashboard = () => {
   const [showArticleHistory, setShowArticleHistory] = useState(true);
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState('');
+  const [nameError, setNameError] = useState('');
   const navigate = useNavigate();
 
   const fetchUserProfile = useCallback(async () => {
@@ -144,20 +145,30 @@ const Dashboard = () => {
     setNewName(userProfile?.name || '');
   };
 
+  // A rejected name is a form error, said beside the field. It used to go to
+  // the page-level error, which replaced the whole dashboard with "Failed to
+  // update profile" and a retry button that reloaded everything.
   const handleNameSave = async () => {
+    const name = newName.trim();
+    if (!name) {
+      setNameError('Please enter a name.');
+      return;
+    }
     try {
-      const response = await api.put('/users/profile', { name: newName });
+      const response = await api.put('/users/profile', { name });
       setUserProfile(response.data.user);
       setIsEditingName(false);
+      setNameError('');
     } catch (err) {
       console.error('Error updating profile:', err);
-      setError('Failed to update profile');
+      setNameError(err.response?.data?.error || 'Your name could not be saved just now.');
     }
   };
 
   const handleNameCancel = () => {
     setIsEditingName(false);
     setNewName('');
+    setNameError('');
   };
 
   const currentDate = new Date().toLocaleDateString('en-US', {
@@ -225,10 +236,13 @@ const Dashboard = () => {
                       <input
                         type="text"
                         value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
+                        onChange={(e) => { setNewName(e.target.value); setNameError(''); }}
                         className="newspaper-name-input"
                         placeholder="Enter your name"
+                        maxLength={60}
+                        aria-invalid={Boolean(nameError)}
                       />
+                      {nameError && <p className="newspaper-name-error" role="alert">{nameError}</p>}
                       <div className="newspaper-name-actions">
                         <button onClick={handleNameSave} className="newspaper-name-btn save">
                           Save

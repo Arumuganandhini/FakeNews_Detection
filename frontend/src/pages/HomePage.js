@@ -1,26 +1,26 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import NewsCard from '../components/NewsCard';
 import '../styles/HomePage.css';
 
 const HomePage = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [articles, setArticles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [initialLoad, setInitialLoad] = useState(true);
   const [personalizedMessage, setPersonalizedMessage] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('general');
   const [currentDate] = useState(new Date());
   const [trustBadges, setTrustBadges] = useState({});
 
-  // Get category from URL query parameter
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const category = params.get('category') || 'general';
-    setSelectedCategory(category);
-  }, [location.search]);
+  // The section is read from the address and nowhere else. It used to be kept
+  // in state as well, starting at "general" and corrected from the address
+  // afterwards, so a link to ?category=technology fetched the general feed
+  // first and then technology — two requests against a daily allowance of 100
+  // for one page view. With the address as the only source, a visit fetches
+  // once, and a refresh stays on the section the reader chose.
+  const selectedCategory = new URLSearchParams(location.search).get('category') || 'general';
 
   const fetchNews = useCallback(async () => {
     try {
@@ -64,7 +64,6 @@ const HomePage = () => {
       console.error('News fetch error:', err);
     } finally {
       setIsLoading(false);
-      setInitialLoad(false);
     }
   }, [selectedCategory]);
 
@@ -112,12 +111,20 @@ const HomePage = () => {
     }
   };
 
+  // One fetch per section. This effect used to depend on an "initial load"
+  // flag that the fetch itself cleared, so every visit ran it twice — two news
+  // requests per page view — and the second run recorded a category click the
+  // reader never made.
   useEffect(() => {
     fetchNews();
-    if (!initialLoad) {
-      trackCategoryClick(selectedCategory);
-    }
-  }, [selectedCategory, fetchNews, initialLoad]);
+  }, [fetchNews]);
+
+  // Choosing a section is the reader's act, so it is recorded here, once.
+  const chooseCategory = (category) => {
+    if (category === selectedCategory) return;
+    trackCategoryClick(category);
+    navigate(`/home?category=${category}`);
+  };
 
   const getCategoryEmoji = (category) => {
     const emojiMap = {
@@ -155,43 +162,43 @@ const HomePage = () => {
         <div className="categories-list">
           <button 
             className={`category-btn ${selectedCategory === 'general' ? 'active' : ''}`}
-            onClick={() => setSelectedCategory('general')}
+            onClick={() => chooseCategory('general')}
           >
             General
           </button>
           <button 
             className={`category-btn ${selectedCategory === 'business' ? 'active' : ''}`}
-            onClick={() => setSelectedCategory('business')}
+            onClick={() => chooseCategory('business')}
           >
             Business
           </button>
           <button 
             className={`category-btn ${selectedCategory === 'technology' ? 'active' : ''}`}
-            onClick={() => setSelectedCategory('technology')}
+            onClick={() => chooseCategory('technology')}
           >
             Technology
           </button>
           <button 
             className={`category-btn ${selectedCategory === 'entertainment' ? 'active' : ''}`}
-            onClick={() => setSelectedCategory('entertainment')}
+            onClick={() => chooseCategory('entertainment')}
           >
             Entertainment
           </button>
           <button 
             className={`category-btn ${selectedCategory === 'sports' ? 'active' : ''}`}
-            onClick={() => setSelectedCategory('sports')}
+            onClick={() => chooseCategory('sports')}
           >
             Sports
           </button>
           <button 
             className={`category-btn ${selectedCategory === 'science' ? 'active' : ''}`}
-            onClick={() => setSelectedCategory('science')}
+            onClick={() => chooseCategory('science')}
           >
             Science
           </button>
           <button 
             className={`category-btn ${selectedCategory === 'health' ? 'active' : ''}`}
-            onClick={() => setSelectedCategory('health')}
+            onClick={() => chooseCategory('health')}
           >
             Health
           </button>
@@ -238,7 +245,14 @@ const HomePage = () => {
       ) : (
         <div className="newspaper-grid">
           {articles.map((article, index) => (
-            <NewsCard key={index} article={article} trustBadge={trustBadges[article.url]} />
+            // Feed stories carry no section of their own, so every read was
+            // filed under "general", which personalisation ignores. The
+            // section the reader is browsing is the best available label.
+            <NewsCard
+              key={article.url || index}
+              article={article.category ? article : { ...article, category: selectedCategory }}
+              trustBadge={trustBadges[article.url]}
+            />
           ))}
         </div>
       )}

@@ -227,14 +227,27 @@ const FactorDetail = ({ factor }) => {
         <div className="factor-detail">
           {factor.detail.matched ? (
             <p>
-              Recognized as <strong>{factor.detail.matchedName}</strong> ({factor.detail.type})
+              Recognized as <strong>{factor.detail.matchedName}</strong>
+              {factor.detail.type !== 'rated domain' && <> ({factor.detail.type})</>}
               {factor.detail.bias && factor.detail.bias !== 'unknown' && (
                 <> &middot; editorial lean: <strong>{factor.detail.bias}</strong></>
               )}
+              {factor.detail.ratingSource && (
+                <> &middot; rated by {factor.detail.ratingSource}</>
+              )}
             </p>
-          ) : (
-            <p>This source is not in the reputation database, so it is treated neutrally.</p>
-          )}
+          ) : factor.detail.impersonates ? (
+            // The explanation above says why; this says what it cost.
+            <p className="source-warning">
+              <strong>Posing as {factor.detail.impersonates}.</strong>{' '}
+              The story is assessed as if from a publisher with a poor record.
+            </p>
+          ) : null
+          // Otherwise the explanation above already says why the source is
+          // unrecognised. It used to be followed by "treated neutrally", which
+          // was never true: an unrated publisher starts less trusted than a
+          // rated one.
+          }
         </div>
       );
 

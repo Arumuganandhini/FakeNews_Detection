@@ -44,9 +44,13 @@ const OutletColumn = ({ outlet }) => (
     <div className="outlet-tags">
       {outlet.reputation.matched ? (
         <>
-          <span className="lean-tag" style={{ background: LEAN_COLORS[outlet.reputation.bias] || LEAN_COLORS.unknown }}>
-            {outlet.reputation.bias}
-          </span>
+          {/* Outlets rated only by the published domain set carry a quality
+              score but no editorial lean; a tag reading "unknown" says nothing. */}
+          {outlet.reputation.bias && outlet.reputation.bias !== 'unknown' && (
+            <span className="lean-tag" style={{ background: LEAN_COLORS[outlet.reputation.bias] || LEAN_COLORS.unknown }}>
+              {outlet.reputation.bias}
+            </span>
+          )}
           <span className="plain-tag">accuracy {outlet.reputation.score}/10</span>
         </>
       ) : (
@@ -80,7 +84,9 @@ const ComparePage = () => {
       setReport(data);
     } catch (err) {
       console.error('Comparison failed:', err);
-      setError('We could not compare coverage just now. Please try again.');
+      // The server says why when it knows (most often the day's news quota);
+      // that is more use to the reader than a generic failure.
+      setError(err.response?.data?.error || 'We could not compare coverage just now. Please try again.');
     } finally {
       setLoading(false);
     }

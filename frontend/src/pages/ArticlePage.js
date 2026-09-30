@@ -87,11 +87,15 @@ const ArticlePage = () => {
   });
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState('');
+  const [imageFailed, setImageFailed] = useState(false);
 
   // Which article the page is currently showing. Replies for anything else are
   // discarded — see the guard in analyze().
   const latestRequest = useRef(article?.url);
-  useEffect(() => { latestRequest.current = article?.url; }, [article]);
+  useEffect(() => {
+    latestRequest.current = article?.url;
+    setImageFailed(false);
+  }, [article]);
 
   // Define trackActivity function using useCallback to avoid recreation on each render
   const trackActivity = useCallback(async (activityType, duration = 0) => {
@@ -146,6 +150,11 @@ const ArticlePage = () => {
             content,
             source: article.source?.name || article.source || 'Unknown',
             url: article.url,
+            // Feed stories are often hours old, and the news index the check
+            // searches runs about a day behind. With the date, a story too new
+            // to have been indexed is reported as that, rather than as a story
+            // nobody else is carrying.
+            publishedAt: article.publishedAt || null,
           };
           break;
         default:
@@ -300,13 +309,17 @@ const ArticlePage = () => {
         <h1 className="article-title">{article.title}</h1>
         <div className="article-meta">
           <span className="article-source">{article.source?.name || 'Unknown Source'}</span>
-          <span className="article-date">
-            {new Date(article.publishedAt).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}
-          </span>
+          {/* Articles reopened from the reading history carry no date, and
+              printing one anyway showed "Invalid Date" under the headline. */}
+          {article.publishedAt && !Number.isNaN(new Date(article.publishedAt).getTime()) && (
+            <span className="article-date">
+              {new Date(article.publishedAt).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </span>
+          )}
         </div>
 
       {/* The answer, before the article.
@@ -348,15 +361,15 @@ const ArticlePage = () => {
             </div>
           )}
       </div>
-        {article.urlToImage && (
+        {/* A publisher's photo that will not load is left out. The fallback
+            used to be a placeholder service that no longer exists, so a
+            failed photo became a broken-image icon above the story. */}
+        {article.urlToImage && !imageFailed && (
           <img
             className="article-image"
             src={article.urlToImage}
             alt={article.title}
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = 'https://via.placeholder.com/800x400?text=No+Image+Available';
-            }}
+            onError={() => setImageFailed(true)}
           />
         )}
         {/* Some feed entries carry no description at all, or a stray fragment

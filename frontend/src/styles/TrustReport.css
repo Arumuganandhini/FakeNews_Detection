@@ -196,6 +196,18 @@
   padding: 0;
 }
 
+/* A page passing itself off as a known newsroom. */
+.factor-detail .source-warning {
+  background: var(--trust-low-soft);
+  border-left: 3px solid var(--trust-low);
+  padding: 0.45rem 0.65rem;
+  color: var(--ink);
+}
+
+.factor-detail .source-warning strong {
+  color: var(--trust-low);
+}
+
 /* Flagged sentences (bias) */
 .flagged-sentences {
   display: flex;
