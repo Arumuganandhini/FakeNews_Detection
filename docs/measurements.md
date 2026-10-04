@@ -30,7 +30,7 @@ scale the content factors use.
 
 | Task | ollama | NIM | Gemini | drift | routed to |
 |---|---|---|---|---|---|
-| clickbait | 100%, 1.8 s | 100%, 4.4 s | 100%, 3.0 s | 0.17 | ollama |
+| clickbait | 100%, 1.8 s | 100%, 8.0 s | 100%, 3.0 s | 0.17 | ollama |
 | bias | 100%, 4.4 s | 67%, 8.0 s | 100%, 10.4 s | 0 | ollama |
 | manipulation | 100%, 3.5 s | 100%, 11.3 s | 100%, 39.5 s | 0 | ollama |
 | transparency | 100%, 1.9 s | 100%, 7.7 s | 100%, 9.2 s | 2.0 | ollama |
