@@ -217,6 +217,7 @@ const searchGoogleNews = async (query, excludeSourceName = '', pageSize = 10, la
   for (const block of xml.match(/<item>[\s\S]*?<\/item>/g) || []) {
     const field = (tag) => (block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`)) || [])[1] || '';
     const source = decodeXml(field('source')).trim();
+    const sourceUrl = (block.match(/<source url="([^"]+)"/) || [])[1] || '';
     let title = decodeXml(field('title')).trim();
     // Google appends " - Outlet" to every headline.
     if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3)).trim();
@@ -230,6 +231,7 @@ const searchGoogleNews = async (query, excludeSourceName = '', pageSize = 10, la
       url: link,
       source,
       publishedAt: Number.isNaN(published.getTime()) ? null : published.toISOString(),
+      sourceUrl,
       via: 'google-news'
     });
     if (items.length >= pageSize) break;

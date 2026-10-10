@@ -98,6 +98,86 @@ const metaContent = (html, patterns) => {
  * @param {string} rawUrl
  * @returns {Promise<{title, content, description, source, url, extractedChars}>}
  */
+// Publishers that block automated reading usually block clients that do not
+// look like a browser, so the page is requested as one.
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-IN,en;q=0.9'
+};
+
+/**
+ * Second route to a page that refused us: a public reader service that fetches
+ * the page and returns its text. It gets through some blocks and not others
+ * (Reuters shows it a CAPTCHA), so anything that looks like an error page is
+ * rejected.
+ */
+const readThroughReader = async (url) => {
+  try {
+    const { data } = await axios.get(`https://r.jina.ai/${url}`, {
+      timeout: 7000, responseType: 'text', maxContentLength: MAX_BYTES, headers: { Accept: 'text/plain' }
+    });
+    const text = String(data || '');
+    if (/Warning: Target URL returned error|CAPTCHA|Request blocked|Access Denied|403 ERROR/i.test(text.slice(0, 1500))) return null;
+    const title = (text.match(/^Title:\s*(.+)$/m) || [])[1] || '';
+    const published = (text.match(/^Published Time:\s*(.+)$/m) || [])[1] || '';
+    const markdown = text.split(/^Markdown Content:\s*$/m)[1] || '';
+    const paragraphs = markdown
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')            // images
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')          // links keep their text
+      .split(/\n\s*\n/)
+      .map(p => p.replace(/[#*_>`|]+/g, ' ').replace(/\s+/g, ' ').trim())
+      .filter(p => p.length >= 60 && /[.!?]/.test(p));
+    const content = paragraphs.join('\n\n').slice(0, 6000);
+    if (!title || content.length < 200) return null;
+    return { title: title.trim(), content, publishedAt: published.trim() || null };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Last route: the headline. A blocked page's address usually spells out its
+ * headline ("/india-cuts-fuel-prices-2026-10-09/"), and Google News lists the
+ * real headline and date. A headline is enough to check what a story claims,
+ * which is better than refusing the link outright.
+ */
+const headlineFromAddress = async (parsed) => {
+  const segments = parsed.pathname.split('/').map(s => decodeURIComponent(s)
+    .replace(/\.(html?|cms|php|aspx?)$/i, '')
+    .replace(/-?\d{4}-\d{2}-\d{2}-?/g, '-'));
+  const slug = segments
+    .filter(s => (s.match(/-/g) || []).length >= 2)
+    .sort((a, b) => b.length - a.length)[0];
+  if (!slug) return null;
+  const words = slug.split('-')
+    .filter(w => w && !/^\d{5,}$/.test(w) && !/^[a-z0-9]{12,}$/i.test(w));
+  if (words.length < 4) return null;
+  const guess = words.join(' ');
+  // Required lazily: newsFetcher does not depend on this file, and loading it
+  // here at the top would make the two modules harder to test separately.
+  const { searchGoogleNews } = require('./newsFetcher');
+  try {
+    const found = await searchGoogleNews(guess, '', 10);
+    const wanted = new Set(words.map(w => w.toLowerCase()));
+    // Only a headline from the same website counts: a similar headline from
+    // another outlet is a different article, and crediting it to this link
+    // would put words in the publisher's mouth.
+    const site = parsed.hostname.replace(/^www\./, '').split('.').slice(-2).join('.');
+    let best = null;
+    for (const item of found) {
+      let itemSite = '';
+      try { itemSite = new URL(item.sourceUrl).hostname.replace(/^www\./, '').split('.').slice(-2).join('.'); } catch { /* none */ }
+      if (itemSite !== site) continue;
+      const have = item.title.toLowerCase().split(/[^\p{L}\p{N}]+/u);
+      const overlap = have.filter(w => wanted.has(w)).length / wanted.size;
+      if (overlap >= 0.6 && (!best || overlap > best.overlap)) best = { ...item, overlap };
+    }
+    if (best) return { title: best.title, source: best.source, publishedAt: best.publishedAt };
+  } catch { /* fall through to the address itself */ }
+  return { title: guess.charAt(0).toUpperCase() + guess.slice(1), source: null, publishedAt: null };
+};
+
 const extractArticle = async (rawUrl) => {
   const parsed = await assertPublicUrl(rawUrl);
 
@@ -108,20 +188,49 @@ const extractArticle = async (rawUrl) => {
       maxContentLength: MAX_BYTES,
       maxRedirects: 3,
       responseType: 'text',
-      headers: {
-        // Some publishers serve a blocking page to unknown clients.
-        'User-Agent': 'Mozilla/5.0 (compatible; NewsTrustBot/1.0; +news-trust-analysis)',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9'
-      }
+      headers: BROWSER_HEADERS
     });
     html = String(response.data || '');
   } catch (err) {
+    const hostname = parsed.hostname.replace(/^www\./, '');
+    // Both fallbacks start at once; the reader's text is preferred when it works.
+    const headlinePromise = headlineFromAddress(parsed).catch(() => null);
+    const viaReader = await readThroughReader(parsed.href);
+    if (viaReader) {
+      return {
+        title: viaReader.title,
+        content: viaReader.content,
+        description: viaReader.content.slice(0, 300),
+        source: { name: hostname },
+        url: parsed.href,
+        urlToImage: null,
+        publishedAt: viaReader.publishedAt || new Date().toISOString(),
+        publishedAtKnown: Boolean(viaReader.publishedAt),
+        extractedChars: viaReader.content.length,
+        readVia: 'reader'
+      };
+    }
+    const headline = await headlinePromise;
+    if (headline) {
+      return {
+        title: headline.title,
+        content: headline.title,
+        description: headline.title,
+        source: { name: headline.source || hostname },
+        url: parsed.href,
+        urlToImage: null,
+        publishedAt: headline.publishedAt || new Date().toISOString(),
+        publishedAtKnown: Boolean(headline.publishedAt),
+        extractedChars: headline.title.length,
+        readVia: 'headline',
+        readNote: `${hostname} does not allow its pages to be read automatically, so only the headline was checked.`
+      };
+    }
     // Many publishers block non-browser traffic outright. That is not the
     // reader's mistake, so say so plainly and let the caller still report
     // what it knows about the publisher.
     const blocked = new Error(
-      `${parsed.hostname.replace(/^www\./, '')} does not allow its pages to be read automatically, so we cannot check this article's contents.`
+      `${hostname} does not allow its pages to be read automatically, so we cannot check this article's contents. Paste the article text or a screenshot instead.`
     );
     blocked.code = 'FETCH_BLOCKED';
     blocked.hostname = parsed.hostname;

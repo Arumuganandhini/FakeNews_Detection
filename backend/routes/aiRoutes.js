@@ -307,7 +307,9 @@ router.post('/analyze-content', async (req, res) => {
           url: article.url,
           modality: 'article',
           provenance: null,
-          ingestNotes: [],
+          // When the publisher blocked reading and only the headline could be
+          // recovered, the reader is told that is all that was checked.
+          ingestNotes: article.readNote ? [article.readNote] : [],
           // Only a date the page actually carried. The extractor falls back to
           // "now" for its own callers; here a guessed date would make every
           // undated article look too recent to check.
