@@ -30,6 +30,38 @@ const INDEX_LAG_HOURS = Number.isFinite(Number(process.env.NEWS_INDEX_LAG_HOURS)
  * is a condition that will happen, so it deserves a real message rather than a
  * bare "something went wrong".
  */
+// A dropped connection or a failed name lookup is usually gone a second later.
+// Measured on 2026-10-10 on the development machine's network: 9 of 16
+// requests to Google News and Wikipedia failed outright within a minute.
+const NETWORK_CODES = new Set(['ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'ECONNRESET', 'ECONNABORTED',
+  'ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH', 'ERR_SOCKET_CONNECTION_TIMEOUT']);
+const isNetworkError = (err) => Boolean(err) && !err.response
+  && (NETWORK_CODES.has(err.code) || /timeout|socket hang up|network/i.test(String(err.message)));
+
+const withRetry = async (fn, retries = 1, delayMs = 1500) => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= retries || !isNetworkError(err)) throw err;
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+};
+
+// Search results are kept for ten minutes. A demo repeats the same searches,
+// and a repeated search then needs no network at all.
+const SEARCH_TTL_MS = 10 * 60 * 1000;
+const searchCache = new Map();
+const cached = async (key, fn) => {
+  const hit = searchCache.get(key);
+  if (hit && Date.now() - hit.at < SEARCH_TTL_MS) return hit.value;
+  const value = await fn();
+  searchCache.set(key, { at: Date.now(), value });
+  if (searchCache.size > 500) searchCache.delete(searchCache.keys().next().value);
+  return value;
+};
+
 const describeNewsApiError = (err) => {
   const status = err.response?.status;
   const raw = err.response?.data;
@@ -40,6 +72,12 @@ const describeNewsApiError = (err) => {
   const isHtmlBody = typeof raw === 'string' && /<html|<!doctype/i.test(raw);
   const detail = String(body.message || (isHtmlBody ? '' : err.message) || '');
 
+  if (!err.response && isNetworkError(err)) {
+    const e = new Error('We could not reach the news services. The internet connection seems to be down or very slow; please check it and try again.');
+    e.code = 'NETWORK_UNAVAILABLE';
+    e.httpStatus = 503;
+    return e;
+  }
   if (status === 429 || /too many requests|rate ?limit/i.test(detail)) {
     const e = new Error("Today's news quota is used up. The free news feed allows 100 requests a day; it resets 24 hours after the first one. Articles already analysed still open normally.");
     e.code = 'NEWS_QUOTA_EXHAUSTED';
@@ -190,7 +228,8 @@ const searchNewsCoverage = async (query, excludeSourceName = '', pageSize = 10, 
   const url = 'https://newsapi.org/v2/everything';
 
   try {
-    const response = await axios.get(url, {
+    const response = await cached(`newsapi|${language}|${pageSize}|${query}`, () => withRetry(() => axios.get(url, {
+      timeout: 10000,
       params: {
         q: query,
         language,
@@ -198,7 +237,7 @@ const searchNewsCoverage = async (query, excludeSourceName = '', pageSize = 10, 
         pageSize,
         apiKey
       }
-    });
+    })));
 
     const exclude = String(excludeSourceName || '').toLowerCase();
     return (response.data.articles || [])
@@ -272,14 +311,18 @@ const searchGoogleNews = async (query, excludeSourceName = '', pageSize = 10, la
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&${edition}`;
   let xml;
   try {
-    const response = await axios.get(url, {
-      timeout: 8000,
-      responseType: 'text',
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Accept-Language': 'en-IN,en;q=0.9' }
-    });
-    xml = String(response.data || '');
+    xml = await cached(`google|${url}`, () => withRetry(async () => {
+      const response = await axios.get(url, {
+        timeout: 8000,
+        responseType: 'text',
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Accept-Language': 'en-IN,en;q=0.9' }
+      });
+      return String(response.data || '');
+    }));
   } catch (error) {
-    throw new SearchUnavailableError(`Google News search could not run: ${error.message}`);
+    const unavailable = new SearchUnavailableError(`Google News search could not run: ${error.message}`);
+    if (isNetworkError(error)) unavailable.code = 'NETWORK_UNAVAILABLE';
+    throw unavailable;
   }
 
   const exclude = String(excludeSourceName || '').toLowerCase();
