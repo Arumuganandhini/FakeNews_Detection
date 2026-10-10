@@ -22,6 +22,28 @@ const LANGUAGE_PACKS = {
 };
 
 /** Is screenshot reading available in this deployment? */
+// A screenshot of a chat carries the app's own text around the message: a
+// "Forwarded many times" label and a timestamp such as "10 Oct 2026, 7:03 am".
+// Read as part of the message, the timestamp's date and time counted as the
+// specific detail a checkable claim needs, so "Wake up, share this before it
+// is deleted" got a verdict instead of being refused. Lines that are nothing
+// but such labels or a time are dropped.
+const MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*';
+const TIME = '\\d{1,2}[:.]\\d{2}\\s*(?:am|pm)?';
+const CHROME_LINES = [
+  /^forwarded(?: many times)?$/i,
+  new RegExp(`^(?:today|yesterday)?,?\\s*${TIME}(?:\\s*[✓✔vV/]{1,2})?$`, 'i'),
+  new RegExp(`^\\d{1,2}\\s+${MONTH}(?:\\s+\\d{4})?,?\\s*(?:${TIME})?$`, 'i'),
+  new RegExp(`^${MONTH}\\s+\\d{1,2}(?:,?\\s+\\d{4})?,?\\s*(?:${TIME})?$`, 'i'),
+  /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4},?\s*(?:\d{1,2}[:.]\d{2}\s*(?:am|pm)?)?$/i
+];
+
+const stripMessageChrome = (text) => text
+  .split('\n')
+  .filter(line => !CHROME_LINES.some(re => re.test(line.trim())))
+  .join('\n')
+  .trim();
+
 const isAvailable = () => {
   if (loadFailed) return false;
   try {
@@ -65,7 +87,7 @@ const readImageText = async (buffer, languages = ['eng']) => {
     }
 
     const { data } = await worker.instance.recognize(buffer);
-    const text = String(data.text || '').replace(/\s+\n/g, '\n').replace(/[ \t]{2,}/g, ' ').trim();
+    const text = stripMessageChrome(String(data.text || '').replace(/\s+\n/g, '\n').replace(/[ \t]{2,}/g, ' ').trim());
 
     return {
       text,
@@ -95,4 +117,4 @@ const shutdown = async () => {
   worker = null;
 };
 
-module.exports = { readImageText, isAvailable, packForLanguage, shutdown, LANGUAGE_PACKS };
+module.exports = { readImageText, isAvailable, packForLanguage, shutdown, LANGUAGE_PACKS , __test: { stripMessageChrome } };
