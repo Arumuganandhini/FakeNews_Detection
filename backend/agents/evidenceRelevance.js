@@ -31,14 +31,30 @@ const STOPWORDS = new Set([
  * Content words worth matching on. Numbers are kept — "312 patients" and
  * "40 crore" are among the most distinctive things a claim contains.
  */
+// Spellings of the same thing that headlines use interchangeably. Without these
+// "TVK lost the 2026 bye elections" shared nothing but "2026" with "TN
+// bye-polls: TVK wins Dharapuram", and correct coverage was thrown away.
+const normalise = (text) => String(text || '')
+  .replace(/\b(?:bye|by)[\s-]?(?:elections?|polls?)\b|\bbyelections?\b|\bbypolls?\b/gi, 'bypoll')
+  .replace(/\b(?:assembly|general|lok sabha)[\s-]?polls?\b/gi, 'election')
+  .replace(/\btamil\s?nadu\b/gi, 'Tamilnadu');
+
+// An all-capital token such as TVK, DMK, BJP or ISRO is a name even though it
+// is short; ordinary short words are not distinctive.
+const isAcronym = (word) => /^\p{Lu}{2,6}$/u.test(word);
+
+// "elections" and "election", "wins" and "win" should match.
+const stem = (term) => (term.length > 4 && term.endsWith('s') && !term.endsWith('ss') ? term.slice(0, -1) : term);
+
 const distinctiveTerms = (text) => {
-  const terms = String(text || '')
-    .toLowerCase()
+  const terms = normalise(text)
     .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .split(/\s+/)
     // Anything containing a digit is kept whatever its length: "312" is three
     // characters and is the single most identifying thing in "312 patients".
-    .filter(term => (/\d/.test(term) ? term.length >= 2 : term.length > 3) && !STOPWORDS.has(term));
+    .filter(term => term && (isAcronym(term) || (/\d/.test(term) ? term.length >= 2 : term.length > 3))
+      && !STOPWORDS.has(term.toLowerCase()))
+    .map(term => stem(term.toLowerCase()));
   return new Set(terms);
 };
 
@@ -58,7 +74,7 @@ const MIN_SHARED_TERMS = 2;
  * is skipped because every sentence begins with a capital.
  */
 const anchorTerms = (text) => {
-  const raw = String(text || '');
+  const raw = normalise(text);
   const anchors = new Set();
 
   const words = raw.split(/\s+/);
@@ -66,9 +82,11 @@ const anchorTerms = (text) => {
     const clean = word.replace(/[^\p{L}\p{N}\p{M}]/gu, '');
     if (!clean) return;
     if (/\d/.test(clean)) { anchors.add(clean.toLowerCase()); return; }
+    // An acronym is a name wherever it stands, including first in the sentence.
+    if (isAcronym(clean) && !STOPWORDS.has(clean.toLowerCase())) { anchors.add(stem(clean.toLowerCase())); return; }
     if (index === 0) return;
     if (/^\p{Lu}/u.test(clean) && clean.length > 3 && !STOPWORDS.has(clean.toLowerCase())) {
-      anchors.add(clean.toLowerCase());
+      anchors.add(stem(clean.toLowerCase()));
     }
   });
 

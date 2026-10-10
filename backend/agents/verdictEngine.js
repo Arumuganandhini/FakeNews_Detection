@@ -147,11 +147,17 @@ const buildEvidenceLedger = ({
   const perClaim = claims.map(claim => {
     const support = analyseIndependence(claim.supportingEvidence || []);
     const contradiction = analyseIndependence(claim.contradictingEvidence || []);
+    // Evidence for and against one claim is weighed against itself. One outlet
+    // read as disagreeing used to outrank four confirming the same claim,
+    // because contradiction is checked first. The side with more independent
+    // outlets counts; an even split counts for neither and stays unconfirmed.
+    const forCount = support.independentCount;
+    const againstCount = contradiction.independentCount;
     return {
       claim: claim.claim,
       verdict: claim.verdict,
-      independentSupport: support.independentCount,
-      independentContradiction: contradiction.independentCount,
+      independentSupport: forCount > againstCount ? forCount : 0,
+      independentContradiction: againstCount > forCount ? againstCount : 0,
       support,
       contradiction,
       highImpact: looksHighImpact(claim.claim)

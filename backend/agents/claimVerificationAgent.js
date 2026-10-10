@@ -58,7 +58,8 @@ Return at most ${maxClaims} claims. If the article contains no checkable claims,
   // became an empty list — and an empty list here is read as a finding: the
   // article asserts nothing another outlet could check. The same article came
   // back REAL on one run and NOT A FACTUAL CLAIM on the next because of it.
-  const result = await callNimApiJson(prompt, { maxTokens: 700, requiredKeys: ['claims'], allowArray: true, label: 'claim extraction' });
+  // Temperature 0: the same text must yield the same claims, or the verdict changes from run to run.
+  const result = await callNimApiJson(prompt, { maxTokens: 700, temperature: 0, requiredKeys: ['claims'], allowArray: true, label: 'claim extraction' });
 
   // Some models return the array directly rather than wrapping it. That is a
   // usable answer, not a malformed one.
@@ -106,19 +107,29 @@ const judgeClaim = async (claim, coverage) => {
     .map((a, i) => `[${i + 1}] ${a.source}: "${a.title}" — ${a.description}`.slice(0, 220))
     .join('\n');
 
-  const prompt = `You are a claim verification system. Determine whether independent news coverage supports, contradicts, or does not address this claim.
+  // Each headline is judged on its own. Asked for one overall verdict, the local
+  // model matched on topic: "TVK lost the 2026 bye elections" was marked as
+  // supported by headlines saying "TVK sweeps both seats", because both are
+  // about TVK and the by-elections. Judging item by item, with the opposite-
+  // outcome case spelled out, is what a small model gets right.
+  const prompt = `You check a claim against news headlines from other outlets.
 
 Claim: "${claim}"
 
-Coverage from other news outlets:
+Headlines:
 ${evidenceText}
 
+For EACH headline decide its stance towards the claim:
+- "agree": it reports the same outcome or fact as the claim.
+- "disagree": it is about the SAME event and reports an outcome that cannot be true at the same time as the claim (for example the claim says a party lost and the headline says that party won; the claim says something happened and the headline says it did not).
+- "unrelated": it is about a different event, place, person or party, or does not say enough to tell. A headline about some other state, candidate or result is "unrelated", not "disagree".
+Read carefully: a headline about the same people or event is NOT automatically "agree". Compare what actually happened.
+
+Before you mark "disagree", ask whether the claim and the headline could BOTH be true. "PM visited Chennai in May" and "Chief Minister met the PM in Delhi in May" can both be true, so that headline is "unrelated", not "disagree".
+
 Return a JSON object with these keys:
-- "verdict": one of supported, contradicted, unverified.
-- "supporting_indices": an array of the numbers of coverage items that clearly report the same fact.
-- "contradicting_indices": an array of the numbers of coverage items that clearly report conflicting facts.
-- "explanation": one sentence.
-Use "supported" only if at least one item clearly reports the same fact. Use "contradicted" if any item reports conflicting facts. Otherwise "unverified".`;
+- "items": an array with one object per headline: {"n": <headline number>, "same_event": true or false, "both_can_be_true": true or false, "stance": "agree" | "disagree" | "unrelated"}.
+- "explanation": one sentence saying what the headlines report compared with the claim.`;
 
   // A model that could not be reached, or whose reply could not be parsed,
   // has not judged this claim. The old code let that fall through to the
@@ -129,17 +140,37 @@ Use "supported" only if at least one item clearly reports the same fact. Use "co
   try {
     result = await callNimApiJson(prompt, {
       maxTokens: 700,
+      // A judgement must not change between two runs on the same headlines; at
+      // the default temperature the same claim came back REAL once and FAKE once.
+      temperature: 0,
       // The shape the caller cannot work without. Without this the gateway
       // accepted a bare `[1]` as a successful reply and the verdict below fell
       // through to undetermined, which the report showed the reader as
       // "we could not complete the search" on a story eight outlets carried.
-      requiredKeys: ['verdict'],
+      requiredKeys: ['items'],
       label: 'stance judgement'
     });
   } catch (err) {
     console.error('Claim judgement failed:', err.message);
     return { verdict: 'undetermined', failed: true, supportingEvidence: [], contradictingEvidence: [],
       discardedEvidence: [], explanation: 'This claim could not be judged against the coverage that was found.' };
+  }
+
+  // The verdict is derived from the per-item stances here, not asked for.
+  if (Array.isArray(result?.items)) {
+    const stance = (it) => String(it?.stance || '').toLowerCase();
+    // A disagreement counts only about the same event, and only when the two
+    // statements cannot both hold: the same guard the premise check uses.
+    result.supporting_indices = result.items
+      .filter(it => stance(it) === 'agree' && it.same_event !== false)
+      .map(it => Number(it.n));
+    result.contradicting_indices = result.items
+      .filter(it => stance(it) === 'disagree' && it.same_event === true && it.both_can_be_true === false)
+      .map(it => Number(it.n));
+    result.verdict = result.contradicting_indices.length > result.supporting_indices.length
+      ? 'contradicted'
+      : result.supporting_indices.length > 0 ? 'supported'
+        : result.contradicting_indices.length > 0 ? 'contradicted' : 'unverified';
   }
 
   // A recovered-but-truncated reply can arrive without the field at all. That
@@ -222,7 +253,9 @@ const gatherCoverage = async ({ keywords, keywordsEn, sourceName, language }) =>
   if (code !== 'en') {
     const englishQuery = keywordsEn || keywords;
     if (englishQuery) searches.push({ query: englishQuery, lang: 'en' });
-  } else {
+  } else if (!searches.some(s => s.lang === 'en')) {
+    // Only when the branch above did not already add it: English text used to
+    // run the identical search twice.
     searches.push({ query: keywords, lang: 'en' });
   }
 

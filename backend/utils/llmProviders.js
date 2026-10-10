@@ -202,7 +202,9 @@ const ollama = {
   // One request at a time. A local model is bounded by the GPU in front of it,
   // not by a rate limit, and issuing several at once makes each of them slower
   // without finishing the batch any sooner.
-  concurrency: Number(process.env.OLLAMA_MAX_CONCURRENT) || 1,
+  // Two at a time: the GPU still works one request at a time, but the next
+  // prompt is already queued at Ollama instead of waiting on a round trip here.
+  concurrency: Number(process.env.OLLAMA_MAX_CONCURRENT) || 2,
   isConfigured: () => Boolean(process.env.OLLAMA_HOST),
   missingKeyMessage:
     'OLLAMA_HOST is not set. Install Ollama, pull a model, then set OLLAMA_HOST=http://localhost:11434 in backend/.env.',

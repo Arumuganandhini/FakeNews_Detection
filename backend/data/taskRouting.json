@@ -303,11 +303,11 @@
     },
     "stance judgement": {
       "chain": [
-        "ollama",
+        "gemini",
         "nim",
-        "gemini"
+        "ollama"
       ],
-      "reason": "local valid on 100% of replies, correct on 100%",
+      "reason": "routed to a hosted model by hand on 2026-10-10: on the live claim \"TVK lost the 2026 bye elections\" the local model marked headlines saying \"TVK sweeps both seats\" as agreeing, in both prompt forms; the benchmark items had no opposite-outcome case",
       "measured": {
         "nim": {
           "validity": 1,
@@ -331,7 +331,8 @@
           "runs": 3
         }
       },
-      "scoreDrift": null
+      "scoreDrift": null,
+      "overriddenAt": "2026-10-10"
     }
   }
 }

@@ -15,9 +15,12 @@ require('dotenv').config();
  *
  * Set NEWS_INDEX_LAG_HOURS to 0 on a plan that serves live articles.
  */
+//
+// Coverage is now searched in Google News as well (searchGoogleNews below),
+// which lists a story within the hour, so the default window is a few hours.
 const INDEX_LAG_HOURS = Number.isFinite(Number(process.env.NEWS_INDEX_LAG_HOURS))
   ? Number(process.env.NEWS_INDEX_LAG_HOURS)
-  : 24;
+  : 3;
 
 /**
  * Turn a NewsAPI failure into something a reader can act on.
@@ -162,18 +165,85 @@ const searchNewsCoverage = async (query, excludeSourceName = '', pageSize = 10, 
   }
 };
 
+// Google News editions to search, by article language. Indian editions are
+// used because that is where this application's readers and outlets are; the
+// English one still returns international coverage.
+const GOOGLE_EDITIONS = {
+  en: 'hl=en-IN&gl=IN&ceid=IN:en',
+  ta: 'hl=ta&gl=IN&ceid=IN:ta',
+  hi: 'hl=hi&gl=IN&ceid=IN:hi',
+  te: 'hl=te&gl=IN&ceid=IN:te',
+  kn: 'hl=kn&gl=IN&ceid=IN:kn',
+  ml: 'hl=ml&gl=IN&ceid=IN:ml',
+  mr: 'hl=mr&gl=IN&ceid=IN:mr',
+  bn: 'hl=bn&gl=IN&ceid=IN:bn'
+};
+
+// Results from social platforms are posts, not reporting by an outlet.
+const NOT_AN_OUTLET = /^(instagram|facebook|x|twitter|threads|reddit|linkedin|quora|pinterest|tiktok|sharechat|youtube)$/i;
+
+const decodeXml = (s) => String(s || '')
+  .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+  .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+  .replace(/&amp;/g, '&');
+
 /**
- * Search coverage, progressively broadening the query until enough outlets
+ * Search Google News for coverage of a claim.
+ *
+ * NewsAPI's free plan runs about a day behind, keeps only the last month and
+ * carries few Indian regional outlets. Google News lists a story within the
+ * hour and covers The Hindu, Times of India, NDTV and regional papers, so a
+ * Tamil Nadu by-election result is found the day it is declared. It needs no
+ * key and has no daily quota. Only headlines, outlets and dates are used.
+ */
+const searchGoogleNews = async (query, excludeSourceName = '', pageSize = 10, language = 'en') => {
+  const edition = GOOGLE_EDITIONS[language] || GOOGLE_EDITIONS.en;
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&${edition}`;
+  let xml;
+  try {
+    const response = await axios.get(url, {
+      timeout: 8000,
+      responseType: 'text',
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Accept-Language': 'en-IN,en;q=0.9' }
+    });
+    xml = String(response.data || '');
+  } catch (error) {
+    throw new SearchUnavailableError(`Google News search could not run: ${error.message}`);
+  }
+
+  const exclude = String(excludeSourceName || '').toLowerCase();
+  const items = [];
+  for (const block of xml.match(/<item>[\s\S]*?<\/item>/g) || []) {
+    const field = (tag) => (block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`)) || [])[1] || '';
+    const source = decodeXml(field('source')).trim();
+    let title = decodeXml(field('title')).trim();
+    // Google appends " - Outlet" to every headline.
+    if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3)).trim();
+    const link = decodeXml(field('link')).trim();
+    if (!title || !link || !source || NOT_AN_OUTLET.test(source)) continue;
+    if (source.toLowerCase() === exclude) continue;
+    const published = new Date(field('pubDate'));
+    items.push({
+      title,
+      description: '',
+      url: link,
+      source,
+      publishedAt: Number.isNaN(published.getTime()) ? null : published.toISOString(),
+      via: 'google-news'
+    });
+    if (items.length >= pageSize) break;
+  }
+  return items;
+};
+
+/**
+ * NewsAPI search, progressively broadening the query until enough outlets
  * are found. NewsAPI requires EVERY term in `q` to match, so a long keyword
  * list (6+ words) usually returns nothing — dropping the least distinctive
  * trailing terms recovers real coverage.
- * @param {string} query - Search keywords, most distinctive first
- * @param {string} [excludeSourceName] - Source to filter out
- * @param {number} [pageSize=10] - Max results per attempt
- * @param {number} [minOutlets=2] - Stop as soon as this many distinct outlets are found
- * @returns {Promise<{articles: Array, query: string}>} results plus the query that produced them
  */
-const searchCoverageBroadening = async (query, excludeSourceName = '', pageSize = 10, minOutlets = 2, language = 'en') => {
+const searchNewsApiBroadening = async (query, excludeSourceName = '', pageSize = 10, minOutlets = 2, language = 'en') => {
   const terms = String(query || '').trim().split(/\s+/).filter(Boolean);
   if (terms.length === 0) return { articles: [], query: '' };
 
@@ -196,4 +266,55 @@ const searchCoverageBroadening = async (query, excludeSourceName = '', pageSize 
   return best;
 };
 
-module.exports = { INDEX_LAG_HOURS, fetchTopNews, searchNewsCoverage, searchCoverageBroadening, SearchUnavailableError };
+const outletsIn = (articles) => new Set(articles.map(a => String(a.source).toLowerCase())).size;
+
+/**
+ * Search coverage of a claim in Google News first, then NewsAPI when Google
+ * found too few outlets. Google answers live and without a quota, so the
+ * daily NewsAPI allowance is spent only when it can still add something.
+ * The search counts as "could not run" only when every source failed.
+ * @param {string} query - Search keywords, most distinctive first
+ * @param {string} [excludeSourceName] - Source to filter out (the article's own outlet)
+ * @param {number} [pageSize=10] - Max results
+ * @param {number} [minOutlets=2] - Enough distinct outlets to stop searching
+ * @returns {Promise<{articles: Array, query: string}>}
+ */
+const searchCoverageBroadening = async (query, excludeSourceName = '', pageSize = 10, minOutlets = 2, language = 'en') => {
+  const terms = String(query || '').trim().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return { articles: [], query: '' };
+  const full = terms.join(' ');
+
+  let google = [];
+  let googleFailed = false;
+  try {
+    google = await searchGoogleNews(full, excludeSourceName, pageSize, language);
+    if (outletsIn(google) < minOutlets && terms.length > 3) {
+      const shorter = await searchGoogleNews(terms.slice(0, 3).join(' '), excludeSourceName, pageSize, language);
+      if (outletsIn(shorter) > outletsIn(google)) google = shorter;
+    }
+  } catch (err) {
+    googleFailed = true;
+    console.error(err.message);
+  }
+  if (outletsIn(google) >= minOutlets) return { articles: google, query: full };
+
+  let newsApi = { articles: [], query: full };
+  try {
+    newsApi = await searchNewsApiBroadening(query, excludeSourceName, pageSize, minOutlets, language);
+  } catch (err) {
+    if (googleFailed) throw err;
+    console.error('NewsAPI search skipped:', err.message);
+  }
+  const seen = new Set();
+  const merged = [...google, ...newsApi.articles].filter(a => {
+    const key = a.title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { articles: merged.slice(0, pageSize), query: newsApi.articles.length ? newsApi.query : full };
+};
+
+module.exports = {
+  INDEX_LAG_HOURS, fetchTopNews, searchNewsCoverage, searchGoogleNews, searchCoverageBroadening, SearchUnavailableError
+};

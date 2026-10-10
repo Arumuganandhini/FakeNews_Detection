@@ -22,6 +22,11 @@
 
 const MIN_CHARACTERS = 40;
 const MIN_WORDS = 8;
+// A one-line claim typed by a reader ("tvk lost 2026 bye elections") is the
+// most common input of all. It is short, but it is still a claim: it is let
+// through when it has at least this much and something specific in it.
+const MIN_SHORT_CHARACTERS = 15;
+const MIN_SHORT_WORDS = 4;
 
 /** Words that carry no searchable specificity. */
 const STOPWORDS = new Set([
@@ -102,6 +107,20 @@ const assessCheckability = (text, title = '') => {
     : body;
   const words = combined.split(/\s+/).filter(Boolean);
   const anchors = findAnchors(combined);
+  const short = words.length < MIN_WORDS;
+  if (short) {
+    // In a one-line claim the first word is often the name ("Modi visited
+    // Chennai"), and readers often type in lower case ("tvk", "modi"). Both
+    // are counted here; the claim extractor reads the text properly after.
+    const lowerCase = combined === combined.toLowerCase();
+    words.forEach((word, index) => {
+      const clean = word.replace(/[^\p{L}\p{N}\p{M}]/gu, '');
+      if (!clean || /\d/.test(clean) || clean.length < 3 || STOPWORDS.has(clean.toLowerCase())) return;
+      if ((index === 0 && /^\p{Lu}/u.test(clean)) || /^\p{Lu}{2,}$/u.test(clean) || (lowerCase && index === 0)) {
+        if (!anchors.names.includes(clean)) anchors.names.push(clean);
+      }
+    });
+  }
   const anchorCount = anchors.names.length + anchors.numbers.length + anchors.dates.length;
 
   const result = (kind, reason, missing = []) => ({
@@ -113,15 +132,19 @@ const assessCheckability = (text, title = '') => {
     anchorCount
   });
 
-  if (combined.length < MIN_CHARACTERS || words.length < MIN_WORDS) {
+  const tooShort = short
+    ? (combined.length < MIN_SHORT_CHARACTERS || words.length < MIN_SHORT_WORDS)
+    : combined.length < MIN_CHARACTERS;
+  if (tooShort) {
     return result('too-short',
-      'There is not enough here to check. Paste the whole message or post, including what is being claimed and who it is about.',
+      'There is not enough here to check. Write the claim as a short sentence, saying who did what, for example "TVK lost the 2026 Dharapuram by-election".',
       ['the full text']);
   }
 
   // A question asks rather than asserts. There is no claim to verify.
   const withoutQuestions = combined.replace(/[^.!?]*\?/g, '').trim();
-  if (withoutQuestions.split(/\s+/).filter(Boolean).length < MIN_WORDS) {
+  const statementWords = withoutQuestions.split(/\s+/).filter(Boolean).length;
+  if (/\?/.test(combined) && statementWords < Math.min(MIN_WORDS, words.length)) {
     return result('question',
       'This asks a question rather than stating something. Paste the claim you want checked, not the question about it.',
       ['a statement of what is claimed']);

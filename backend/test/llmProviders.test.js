@@ -119,8 +119,8 @@ test('the provider order is configuration, and an unconfigured one is skipped', 
     const chain = providers.resolveProviderChain();
     assert.strictEqual(chain.length, 1, 'only the configured provider belongs in the chain');
     assert.strictEqual(chain[0].name, 'ollama');
-    assert.strictEqual(providers.resolveConcurrency(), 1,
-      'concurrency follows the leading provider, and a local GPU serves one request at a time');
+    assert.strictEqual(providers.resolveConcurrency(), 2,
+      'concurrency follows the leading provider; a local GPU gets two queued requests');
   } finally {
     delete process.env.OLLAMA_HOST;
     delete process.env.LLM_PROVIDER;

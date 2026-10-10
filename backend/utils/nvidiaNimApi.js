@@ -1,5 +1,5 @@
 const {
-  resolveProviderChain, resolveConcurrency,
+  resolveProviderChain,
   isRetired, isOverloaded, isRateLimited, isAuthFailure, isConnectionFailure
 } = require('./llmProviders');
 
@@ -21,31 +21,43 @@ const activeModel = {};
    waits and retries rather than degrading.
 --------------------------------------------------------------------------- */
 
-// Set by whichever provider leads: NIM degrades when pushed and stays at two,
-// Gemini does not and runs six. Resolved once at startup so the value is stable
-// for the life of the process.
-const MAX_CONCURRENT = resolveConcurrency();
+// Each provider's limit comes from llmProviders.js: NIM degrades when pushed and
+// stays at two, Gemini does not and runs six, Ollama two.
 const MAX_RATE_LIMIT_RETRIES = 3;
 
-let inFlight = 0;
-const waiting = [];
 
-console.log(`LLM gateway: ${MAX_CONCURRENT} concurrent call(s) max.`);
+// Slots are held per provider. With one shared queue, a 10-second premise check
+// on NVIDIA NIM held the only slot while the local model, which answers in about
+// a second, sat idle; an analysis took the sum of every call. Now each provider
+// queues only its own calls, so hosted and local work overlap.
+const OVERRIDE = Number(process.env.LLM_MAX_CONCURRENT || process.env.NIM_MAX_CONCURRENT);
+const providerSlots = new Map();
+console.log(`LLM gateway: concurrency per provider (${OVERRIDE > 0 ? OVERRIDE : 'Ollama 2, NIM 2, Gemini 6'}).`);
 
-const acquireSlot = () =>
+const slotsFor = (provider) => {
+  if (!providerSlots.has(provider.name)) {
+    const max = Number.isFinite(OVERRIDE) && OVERRIDE > 0 ? OVERRIDE : (provider.concurrency || 2);
+    providerSlots.set(provider.name, { inFlight: 0, waiting: [], max });
+  }
+  return providerSlots.get(provider.name);
+};
+
+const acquireSlot = (provider) =>
   new Promise((resolve) => {
-    if (inFlight < MAX_CONCURRENT) {
-      inFlight++;
+    const s = slotsFor(provider);
+    if (s.inFlight < s.max) {
+      s.inFlight++;
       resolve();
     } else {
-      waiting.push(resolve);
+      s.waiting.push(resolve);
     }
   });
 
-const releaseSlot = () => {
-  const next = waiting.shift();
+const releaseSlot = (provider) => {
+  const s = slotsFor(provider);
+  const next = s.waiting.shift();
   if (next) next();          // hand the slot straight to the next caller
-  else inFlight--;
+  else s.inFlight--;
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -90,8 +102,7 @@ const callNimApi = async (prompt, options = {}) => {
     json: Boolean(options.json)
   };
 
-  await acquireSlot();
-  try {
+  {
     let lastError;
 
     for (const provider of providers) {
@@ -103,7 +114,13 @@ const callNimApi = async (prompt, options = {}) => {
       for (const model of models) {
         for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
           try {
-            const text = await provider.send({ ...request, model });
+            await acquireSlot(provider);
+            let text;
+            try {
+              text = await provider.send({ ...request, model });
+            } finally {
+              releaseSlot(provider);
+            }
             // Only adopt a different model permanently when the previous one is
             // actually gone. A backup used during a passing overload must not
             // demote a healthy primary for the rest of the process.
@@ -165,8 +182,6 @@ const callNimApi = async (prompt, options = {}) => {
     }
 
     throw lastError || new Error('No language model was available.');
-  } finally {
-    releaseSlot();
   }
 };
 
