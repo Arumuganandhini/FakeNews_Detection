@@ -145,7 +145,9 @@ const resolveArticleText = async ({ url, title = '', fallback = '', allowFetch =
   let record = { status: 'unavailable', text: '', chars: 0 };
 
   try {
-    const article = await extractArticle(url);
+    // The snippet is already in hand, so a blocked page is not worth a long
+    // wait: no headline rebuild, and a short limit on the reader service.
+    const article = await extractArticle(url, { headlineFallback: false, readerTimeout: 4000 });
     const full = stripMarker(article?.content);
     if (full.length >= MIN_USEFUL_CHARS && full.length > snippet.length
         && looksLikeTheArticle(full, title || article?.title)) {

@@ -112,10 +112,10 @@ const BROWSER_HEADERS = {
  * (Reuters shows it a CAPTCHA), so anything that looks like an error page is
  * rejected.
  */
-const readThroughReader = async (url) => {
+const readThroughReader = async (url, timeout = 7000) => {
   try {
     const { data } = await axios.get(`https://r.jina.ai/${url}`, {
-      timeout: 7000, responseType: 'text', maxContentLength: MAX_BYTES, headers: { Accept: 'text/plain' }
+      timeout, responseType: 'text', maxContentLength: MAX_BYTES, headers: { Accept: 'text/plain' }
     });
     const text = String(data || '');
     if (/Warning: Target URL returned error|CAPTCHA|Request blocked|Access Denied|403 ERROR/i.test(text.slice(0, 1500))) return null;
@@ -178,7 +178,13 @@ const headlineFromAddress = async (parsed) => {
   return { title: guess.charAt(0).toUpperCase() + guess.slice(1), source: null, publishedAt: null };
 };
 
-const extractArticle = async (rawUrl) => {
+/**
+ * @param {string} rawUrl
+ * @param {{headlineFallback?: boolean, readerTimeout?: number}} [options] - the
+ *        article page already holds the feed's snippet, so it skips the
+ *        headline fallback and waits less for the reader service.
+ */
+const extractArticle = async (rawUrl, { headlineFallback = true, readerTimeout = 7000 } = {}) => {
   const parsed = await assertPublicUrl(rawUrl);
 
   let html;
@@ -194,8 +200,8 @@ const extractArticle = async (rawUrl) => {
   } catch (err) {
     const hostname = parsed.hostname.replace(/^www\./, '');
     // Both fallbacks start at once; the reader's text is preferred when it works.
-    const headlinePromise = headlineFromAddress(parsed).catch(() => null);
-    const viaReader = await readThroughReader(parsed.href);
+    const headlinePromise = headlineFallback ? headlineFromAddress(parsed).catch(() => null) : Promise.resolve(null);
+    const viaReader = await readThroughReader(parsed.href, readerTimeout);
     if (viaReader) {
       return {
         title: viaReader.title,

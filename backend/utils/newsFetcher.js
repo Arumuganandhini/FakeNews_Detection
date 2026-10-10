@@ -61,7 +61,77 @@ const describeNewsApiError = (err) => {
   return e;
 };
 
+// The feed is cached per category. Every page view used to call NewsAPI, and in
+// development React runs each effect twice, so one visit spent four of the 100
+// requests a day; by afternoon the quota was gone and the front page stopped
+// loading. Concurrent requests for the same category share one call, and when
+// NewsAPI refuses, the last good copy is served, or Google News top stories.
+const FEED_TTL_MS = 15 * 60 * 1000;
+const feedCache = new Map();   // category -> { at, articles }
+const feedInFlight = new Map(); // category -> Promise
+
+const GOOGLE_TOPICS = {
+  business: 'BUSINESS', technology: 'TECHNOLOGY', entertainment: 'ENTERTAINMENT',
+  sports: 'SPORTS', science: 'SCIENCE', health: 'HEALTH'
+};
+
+const googleTopStories = async (category) => {
+  const topic = GOOGLE_TOPICS[category];
+  const url = topic
+    ? `https://news.google.com/rss/headlines/section/topic/${topic}?${GOOGLE_EDITIONS.en}`
+    : `https://news.google.com/rss?${GOOGLE_EDITIONS.en}`;
+  const { data } = await axios.get(url, { timeout: 8000, responseType: 'text', headers: { 'User-Agent': 'Mozilla/5.0' } });
+  const items = [];
+  for (const block of String(data || '').match(/<item>[\s\S]*?<\/item>/g) || []) {
+    const field = (tag) => (block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`)) || [])[1] || '';
+    const source = decodeXml(field('source')).trim();
+    let title = decodeXml(field('title')).trim();
+    if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3)).trim();
+    const link = decodeXml(field('link')).trim();
+    if (!title || !link || !source || NOT_AN_OUTLET.test(source)) continue;
+    const published = new Date(field('pubDate'));
+    items.push({
+      title, description: '', content: '', url: link, urlToImage: null, source: { name: source },
+      publishedAt: Number.isNaN(published.getTime()) ? new Date().toISOString() : published.toISOString()
+    });
+    if (items.length >= 30) break;
+  }
+  return items;
+};
+
 const fetchTopNews = async (category = 'general') => {
+  const cached = feedCache.get(category);
+  if (cached && Date.now() - cached.at < FEED_TTL_MS) return cached.articles;
+  if (feedInFlight.has(category)) return feedInFlight.get(category);
+
+  const request = fetchTopNewsFromApi(category)
+    .then(articles => {
+      feedCache.set(category, { at: Date.now(), articles });
+      return articles;
+    })
+    .catch(async (err) => {
+      if (cached) {
+        console.warn(`News feed (${category}): NewsAPI refused (${err.code}); serving the copy from ${new Date(cached.at).toLocaleTimeString()}.`);
+        return cached.articles;
+      }
+      try {
+        const google = await googleTopStories(category);
+        if (google.length) {
+          console.warn(`News feed (${category}): NewsAPI refused (${err.code}); serving Google News top stories.`);
+          feedCache.set(category, { at: Date.now() - FEED_TTL_MS + 5 * 60 * 1000, articles: google });
+          return google;
+        }
+      } catch (googleErr) {
+        console.error('Google News feed fallback failed:', googleErr.message);
+      }
+      throw err;
+    })
+    .finally(() => feedInFlight.delete(category));
+  feedInFlight.set(category, request);
+  return request;
+};
+
+const fetchTopNewsFromApi = async (category = 'general') => {
 const apiKey = process.env.NEWS_API_KEY;
 
   const url = `https://newsapi.org/v2/top-headlines?category=${category}&language=en&pageSize=30&apiKey=${apiKey}`;
