@@ -3,7 +3,7 @@
 // claims, search for coverage from OTHER outlets, and have the LLM judge
 // whether that independent coverage supports or contradicts each claim.
 const { callNimApiJson } = require('../utils/nvidiaNimApi');
-const { searchCoverageBroadening } = require('../utils/newsFetcher');
+const { searchCoverageBroadening, searchGoogleNews } = require('../utils/newsFetcher');
 const { getSourceReputation } = require('./sourceReputationAgent');
 const { isSearchable } = require('../utils/language');
 const { filterRelevant, anchorTerms, distinctiveTerms } = require('./evidenceRelevance');
@@ -51,7 +51,9 @@ Content: ${(content || '').slice(0, 2000)}
 
 Return a JSON object with one key, "claims": an array of at most ${maxClaims} entries, empty when the article contains nothing checkable. Each entry has:
 - "claim": the factual claim in one sentence.
+- "headline": the same claim written as a short English news headline, the way a newspaper reporting it would phrase it (for "UAE lost to Namibia" write "Namibia beat UAE").
 ${keywordFields}
+Do not split one statement into a trivial part and its real point: for "UAE lost to Namibia" give one claim about who won or lost, not a separate claim that the match took place.
 Return at most ${maxClaims} claims. If the article contains no checkable claims, return an empty array.${isForeign ? `\nWrite "claim" in English so the verdict can be explained to the reader, but keep "search_keywords" in ${language.name}.` : ''}`;
 
   // Without requiredKeys, any valid JSON lacking a `claims` key silently
@@ -87,6 +89,7 @@ Return at most ${maxClaims} claims. If the article contains no checkable claims,
         claim: String(c.claim),
         keywords,
         keywordsEn: c.search_keywords_en ? String(c.search_keywords_en) : null,
+        headline: c.headline ? String(c.headline).slice(0, 160) : null,
         keywordsDerived: !given
       };
     })
@@ -103,7 +106,7 @@ const judgeClaim = async (claim, coverage) => {
   // and run out of reply budget before answering. Corroboration needs two
   // independent outlets, so six candidates is ample.
   const evidenceText = coverage
-    .slice(0, 6)
+    .slice(0, 8)
     .map((a, i) => `[${i + 1}] ${a.source}: "${a.title}" — ${a.description}`.slice(0, 220))
     .join('\n');
 
@@ -241,7 +244,7 @@ Return a JSON object with these keys:
  * @returns {Promise<Array>} deduplicated coverage, each item tagged with the
  *          search language that found it
  */
-const gatherCoverage = async ({ keywords, keywordsEn, sourceName, language }) => {
+const gatherCoverage = async ({ claim, headline, keywords, keywordsEn, sourceName, language }) => {
   const code = language?.code || 'en';
   const searches = [];
 
@@ -262,19 +265,48 @@ const gatherCoverage = async ({ keywords, keywordsEn, sourceName, language }) =>
   // A search that could not run is recorded as such rather than as an empty
   // result. With two searches in flight, one failing while the other returns
   // coverage is still a usable answer; both failing is not an answer at all.
-  const batches = await Promise.all(
-    searches.map(({ query, lang }) =>
-      searchCoverageBroadening(query, sourceName, 8, 2, lang)
-        .then(({ articles }) => ({ articles: articles.map(a => ({ ...a, foundIn: lang })) }))
-        .catch(err => {
-          console.error(`Coverage search (${lang}) could not run:`, err.message);
-          return { articles: [], failed: true };
-        }))
-  );
+  const keywordBatches = searches.map(({ query, lang }) =>
+    searchCoverageBroadening(query, sourceName, 8, 2, lang)
+      .then(({ articles }) => ({ articles: articles.map(a => ({ ...a, foundIn: lang })) }))
+      .catch(err => {
+        console.error(`Coverage search (${lang}) could not run:`, err.message);
+        return { articles: [], failed: true };
+      }));
+
+  // The claim itself is also searched, as a sentence. Keywords drop the words
+  // that say what happened: "UAE lost to Namibia in CWC League 2" became "UAE
+  // Namibia CWC League", whose top results were match previews, and the report
+  // of the result ("Namibia cruise to eight-wicket win over UAE") never reached
+  // the stance judgement. Google ranks by the whole sentence, outcome included.
+  // Its results come first, since they are the most specific.
+  // The claim is also searched as a headline. Outlets report a result as "Namibia
+  // beat UAE" or "Namibia cruise to win over UAE", never as "UAE lost to
+  // Namibia", so the extractor writes each claim the way a headline would and
+  // that phrasing is searched alongside the claim sentence.
+  const asQuery = (text) => String(text || '').replace(/[.!?"]+$/g, '').split(/\s+/).slice(0, 14).join(' ');
+  const phrasings = [...new Set([asQuery(headline), asQuery(claim)].filter(Boolean))];
+  const claimBatch = Promise.all(phrasings.map(q => searchGoogleNews(q, sourceName, 8, 'en')
+    .then(articles => ({ articles }))
+    .catch(() => ({ articles: [], failed: true }))))
+    .then(found => ({
+      lists: found.map(f => f.articles.map(a => ({ ...a, foundIn: 'en' }))),
+      failed: found.length === 0 || found.every(f => f.failed)
+    }));
+
+  const [fromClaim, ...batches] = await Promise.all([claimBatch, ...keywordBatches]);
 
   const seen = new Set();
   const merged = [];
-  for (const article of batches.flatMap(b => b.articles)) {
+  // Interleaved: the first result of every search, then the second of every
+  // search, and so on. Taking one search's results first let the headline
+  // search ("TVK lose bypolls" found May's assembly-election stories) crowd the
+  // keyword search's by-election results out of the headlines that are judged.
+  const lists = [...fromClaim.lists, ...batches.map(b => b.articles)];
+  const interleaved = [];
+  for (let i = 0; lists.some(l => i < l.length); i++) {
+    for (const l of lists) if (i < l.length) interleaved.push(l[i]);
+  }
+  for (const article of interleaved) {
     const key = article.url || `${article.source}|${article.title}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -282,7 +314,7 @@ const gatherCoverage = async ({ keywords, keywordsEn, sourceName, language }) =>
   }
   return {
     articles: merged.slice(0, 10),
-    searchFailed: batches.length > 0 && batches.every(b => b.failed)
+    searchFailed: batches.every(b => b.failed) && (fromClaim.failed || fromClaim.lists.every(l => l.length === 0))
   };
 };
 
@@ -366,8 +398,8 @@ const verifyClaims = async (title, content, sourceName, preExtractedClaims = nul
     // — search, wait, judge, wait, then the same again for the next claim —
     // which made verification the slowest factor in the pipeline at ~28s.
     // The model gateway still caps how many calls are actually in flight.
-    const results = await Promise.all(claims.map(async ({ claim, keywords, keywordsEn }) => {
-      const { articles: coverage, searchFailed } = await gatherCoverage({ keywords, keywordsEn, sourceName, language });
+    const results = await Promise.all(claims.map(async ({ claim, headline, keywords, keywordsEn }) => {
+      const { articles: coverage, searchFailed } = await gatherCoverage({ claim, headline, keywords, keywordsEn, sourceName, language });
       if (searchFailed) {
         return {
           claim,
